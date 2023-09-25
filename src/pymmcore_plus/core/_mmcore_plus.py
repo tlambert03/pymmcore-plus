@@ -475,6 +475,18 @@ class CMMCorePlus(pymmcore.CMMCore):
         cfg = super().getConfigGroupState(group)
         return cfg if native else Configuration.from_configuration(cfg)
 
+    @overload
+    def getConfigGroupStateFromCache(
+        self, group: str, *, native: Literal[True]
+    ) -> pymmcore.Configuration:
+        ...
+
+    @overload
+    def getConfigGroupStateFromCache(
+        self, group: str, *, native: Literal[False] = False
+    ) -> Configuration:
+        ...
+
     def getConfigGroupStateFromCache(
         self, group: str, *, native: bool = False
     ) -> Configuration | pymmcore.Configuration:
@@ -486,6 +498,14 @@ class CMMCorePlus(pymmcore.CMMCore):
         """
         cfg = super().getConfigGroupStateFromCache(group)
         return cfg if native else Configuration.from_configuration(cfg)
+
+    @overload
+    def getConfigState(self, *, native: Literal[True]) -> pymmcore.Configuration:
+        ...
+
+    @overload
+    def getConfigState(self, *, native: Literal[False] = ...) -> Configuration:
+        ...
 
     def getConfigState(
         self, group: str, config: str, *, native: bool = False
