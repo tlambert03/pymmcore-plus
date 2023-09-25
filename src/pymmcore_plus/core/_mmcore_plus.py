@@ -499,6 +499,14 @@ class CMMCorePlus(pymmcore.CMMCore):
         cfg = super().getConfigState(group, config)
         return cfg if native else Configuration.from_configuration(cfg)
 
+    @overload
+    def getSystemState(self, *, native: Literal[True]) -> pymmcore.Configuration:
+        ...
+
+    @overload
+    def getSystemState(self, *, native: Literal[False] = ...) -> Configuration:
+        ...
+
     def getSystemState(
         self, *, native: bool = False
     ) -> Configuration | pymmcore.Configuration:
@@ -510,6 +518,14 @@ class CMMCorePlus(pymmcore.CMMCore):
         """
         cfg = super().getSystemState()
         return cfg if native else Configuration.from_configuration(cfg)
+
+    @overload
+    def getSystemStateCache(self, *, native: Literal[True]) -> pymmcore.Configuration:
+        ...
+
+    @overload
+    def getSystemStateCache(self, *, native: Literal[False] = ...) -> Configuration:
+        ...
 
     def getSystemStateCache(
         self, *, native: bool = False
