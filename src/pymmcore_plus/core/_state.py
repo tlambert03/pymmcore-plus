@@ -1,5 +1,5 @@
 from contextlib import suppress
-from typing import Any, Sequence
+from typing import Any, Sequence, TypedDict
 
 from pymmcore_plus import CMMCorePlus
 
@@ -17,38 +17,22 @@ SYS_STATUS = {
     # "getAutoShutter",
     # "shutterOpen",
 }
-SYSTEM = {
-    "APIVersionInfo",
-    "BufferFreeCapacity",
-    "BufferTotalCapacity",
-    "CircularBufferMemoryFootprint",
-    "RemainingImageCount",
-    "DeviceAdapterSearchPaths",
-    "HostName",
-    "MACAddresses",
-    "PrimaryLogFile",
-    "VersionInfo",
-    "UserId",
-    "TimeoutMs",  # rarely needed for metadata
-}
 
 
-IMAGE = {
-    "BytesPerPixel",
-    "Exposure",
-    "ImageBitDepth",
-    "ImageBufferSize",
-    "ImageHeight",
-    "ImageWidth",
-    "MagnificationFactor",
-    "MultiROI",
-    "NumberOfCameraChannels",
-    "NumberOfComponents",
-    "PixelSizeAffine",
-    "PixelSizeUm",
-    "ROI",
-    "CurrentPixelSizeConfig",
-}
+class SystemInfoDict(TypedDict):
+    APIVersionInfo: str
+    BufferFreeCapacity: int
+    BufferTotalCapacity: int
+    CircularBufferMemoryFootprint: int
+    DeviceAdapterSearchPaths: tuple[str, ...]
+    HostName: str
+    MACAddresses: tuple[str, ...]
+    PrimaryLogFile: str
+    RemainingImageCount: int
+    TimeoutMs: int  # rarely needed for metadata
+    UserId: str
+    VersionInfo: str
+
 
 core = CMMCorePlus()
 core.loadSystemConfiguration()
@@ -56,31 +40,93 @@ core.loadSystemConfiguration()
 # core.setXYPosition(1, 2)
 
 
+class ImageDict(TypedDict):
+    BytesPerPixel: int
+    CurrentPixelSizeConfig: str
+    Exposure: float
+    ImageBitDepth: int
+    ImageBufferSize: int
+    ImageHeight: int
+    ImageWidth: int
+    MagnificationFactor: float
+    MultiROI: tuple[list[int], list[int], list[int], list[int]] | None
+    NumberOfCameraChannels: int
+    NumberOfComponents: int
+    PixelSizeAffine: tuple[float, float, float, float, float, float]
+    PixelSizeUm: int
+    ROI: list[int]
+
+
+class PositionDict(TypedDict):
+    X: float | None
+    Y: float | None
+    Focus: float | None
+
+
+class AutoFocusDict(TypedDict):
+    CurrentFocusScore: float
+    LastFocusScore: float
+    AutoFocusOffset: float | None
+
+
+class PixelSizeConfigDict(TypedDict):
+    Objective: dict[str, str]
+    PixelSizeUm: float
+    PixelSizeAffine: tuple[float, float, float, float, float, float]
+
+
+class DeviceTypeDict(TypedDict):
+    Type: str
+    Description: str
+    Adapter: str
+
+
+class StateDict(TypedDict, total=False):
+    Device: dict[str, dict[str, str]]
+    SystemInfo: SystemInfoDict
+    SystemStatus: dict[str, bool]
+    ConfigGroups: dict[str, dict[str, Any]]
+    Image: ImageDict
+    Position: PositionDict
+    Autofocus: AutoFocusDict
+    PixelSizeConfig: dict[str, str | PixelSizeConfigDict]
+    DeviceTypes: dict[str, DeviceTypeDict]
+
+
 def state(
     core: CMMCorePlus,
     *,
-    devices: bool = True,
-    system_info: bool = False,
+    devices: bool = False,
+    image: bool = True,
+    system_info: bool = True,
     system_status: bool = False,
     config_groups: bool | Sequence[str] = False,
-    image: bool = True,
-    position: bool = True,
+    position: bool = False,
     autofocus: bool = False,
     pixel_size_configs: bool = False,
-    device_types: bool = True,
+    device_types: bool = False,
     cached: bool = True,
     error_value: Any = None,
 ) -> dict:
     out: dict = {}
+
     if devices:
+        # this actually appears to be faster than getSystemStateCache
         device_state: dict = {}
-        _state = core.getSystemStateCache() if cached else core.getSystemState()
-        for dev, prop, val in _state:
-            device_state.setdefault(dev, {})[prop] = val
+        for dev in core.getLoadedDevices():
+            dd = device_state.setdefault(dev, {})
+            for prop in core.getDevicePropertyNames(dev):
+                try:
+                    val = core.getProperty(dev, prop)
+                except Exception:
+                    val = error_value
+                dd[prop] = val
         out["Devices"] = device_state
+
     if system_info:
         out["SystemInfo"] = {
-            key: getattr(core, f"get{key}")() for key in sorted(SYSTEM)
+            key: getattr(core, f"get{key}")()
+            for key in sorted(SystemInfoDict.__annotations__)
         }
     if system_status:
         # XXX: maybe move... the only reason to leave out of SYS_STATUS is
@@ -114,7 +160,7 @@ def state(
 
     if image:
         img_dict: dict = {}
-        for key in sorted(IMAGE):
+        for key in sorted(ImageDict.__annotations__):
             try:
                 val = getattr(core, f"get{key}")()
             except Exception:
@@ -154,14 +200,14 @@ def state(
         out["PixelSizeConfig"] = px
 
     if device_types:
-        dev_types_dict = {}
-        for dev_name in core.getLoadedDevices():
-            dev_types_dict[dev_name] = {
+        out["DeviceTypes"] = {
+            dev_name: {
                 "Type": core.getDeviceType(dev_name).name,
                 "Description": core.getDeviceDescription(dev_name),
                 "Adapter": core.getDeviceName(dev_name),
             }
-        out["DeviceTypes"] = dev_types_dict
+            for dev_name in core.getLoadedDevices()
+        }
     return out
 
 
@@ -173,4 +219,4 @@ _start = time.perf_counter_ns()
 x = state(core)
 fin = time.perf_counter_ns() - _start
 print(x)
-print(fin / 1000000)
+print(fin / 1000000, "ms")
