@@ -1,22 +1,12 @@
+from __future__ import annotations
+
 from contextlib import suppress
-from typing import Any, Sequence, TypedDict
+from typing import TYPE_CHECKING, Any, Sequence, TypedDict, cast
 
-from pymmcore_plus import CMMCorePlus
+if TYPE_CHECKING:
+    from typing_extensions import Literal
 
-# ---- these methods don't start with get, but take no arguments ----
-SYS_STATUS = {
-    "debugLogEnabled",
-    "isBufferOverflowed",
-    "isContinuousFocusEnabled",
-    "isContinuousFocusLocked",
-    "isSequenceRunning",
-    "stderrLogEnabled",
-    "systemBusy",
-    # "isMultiROIEnabled",  # camera related
-    # "isMultiROISupported",
-    # "getAutoShutter",
-    # "shutterOpen",
-}
+    from pymmcore_plus import CMMCorePlus
 
 
 class SystemInfoDict(TypedDict):
@@ -32,12 +22,6 @@ class SystemInfoDict(TypedDict):
     TimeoutMs: int  # rarely needed for metadata
     UserId: str
     VersionInfo: str
-
-
-core = CMMCorePlus()
-core.loadSystemConfiguration()
-# core.setPixelSizeConfig("Res40x")
-# core.setXYPosition(1, 2)
 
 
 class ImageDict(TypedDict):
@@ -81,142 +65,181 @@ class DeviceTypeDict(TypedDict):
     Adapter: str
 
 
+class SystemStatusDict(TypedDict):
+    debugLogEnabled: bool
+    isBufferOverflowed: bool
+    isContinuousFocusEnabled: bool
+    isContinuousFocusLocked: bool
+    isSequenceRunning: bool
+    stderrLogEnabled: bool
+    systemBusy: bool
+    autoShutter: bool
+    shutterOpen: bool
+
+
 class StateDict(TypedDict, total=False):
-    Device: dict[str, dict[str, str]]
+    Devices: dict[str, dict[str, str]]
     SystemInfo: SystemInfoDict
-    SystemStatus: dict[str, bool]
+    SystemStatus: SystemStatusDict
     ConfigGroups: dict[str, dict[str, Any]]
     Image: ImageDict
     Position: PositionDict
-    Autofocus: AutoFocusDict
+    AutoFocus: AutoFocusDict
     PixelSizeConfig: dict[str, str | PixelSizeConfigDict]
     DeviceTypes: dict[str, DeviceTypeDict]
 
 
-def state(
+def core_state(
     core: CMMCorePlus,
     *,
-    devices: bool = False,
+    devices: bool = True,
     image: bool = True,
-    system_info: bool = True,
+    system_info: bool = False,
     system_status: bool = False,
-    config_groups: bool | Sequence[str] = False,
+    config_groups: bool | Sequence[str] = True,
     position: bool = False,
     autofocus: bool = False,
     pixel_size_configs: bool = False,
     device_types: bool = False,
     cached: bool = True,
     error_value: Any = None,
-) -> dict:
-    out: dict = {}
-
+) -> StateDict:
+    out: StateDict = {}
     if devices:
-        # this actually appears to be faster than getSystemStateCache
-        device_state: dict = {}
-        for dev in core.getLoadedDevices():
-            dd = device_state.setdefault(dev, {})
-            for prop in core.getDevicePropertyNames(dev):
-                try:
-                    val = core.getProperty(dev, prop)
-                except Exception:
-                    val = error_value
-                dd[prop] = val
-        out["Devices"] = device_state
-
+        out["Devices"] = get_device_state(core, error_value)
     if system_info:
-        out["SystemInfo"] = {
-            key: getattr(core, f"get{key}")()
-            for key in sorted(SystemInfoDict.__annotations__)
-        }
+        out["SystemInfo"] = get_system_info(core)
     if system_status:
-        # XXX: maybe move... the only reason to leave out of SYS_STATUS is
-        # because it's the only getX method and we want more uniform keys?
-        out["SystemStatus"] = {
-            "autoShutter": core.getAutoShutter(),
-            "shutterOpen": core.getShutterOpen(),
-        }
-        out["SystemStatus"].update(
-            {key: getattr(core, key)() for key in sorted(SYS_STATUS)}
-        )
-
+        out["SystemStatus"] = get_system_status(core)
     if config_groups:
-        if not isinstance(config_groups, (list, tuple, set)):
-            config_groups = core.getAvailableConfigGroups()
-
-        cfg_group_dict: dict = {}
-        for grp in config_groups:
-            if grp == "[Channel]":
-                grp = core.getChannelGroup()
-
-            grp_dict = cfg_group_dict.setdefault(grp, {})
-            grp_info = (
-                core.getConfigGroupStateFromCache(grp)
-                if cached
-                else core.getConfigGroupState(grp)
-            )
-            for dev, prop, val in grp_info:
-                grp_dict.setdefault(dev, {})[prop] = val
-        out["ConfigGroups"] = cfg_group_dict
-
+        out["ConfigGroups"] = get_config_groups(core, config_groups, cached)
     if image:
-        img_dict: dict = {}
-        for key in sorted(ImageDict.__annotations__):
-            try:
-                val = getattr(core, f"get{key}")()
-            except Exception:
-                val = error_value
-            img_dict[key] = val
-        out["Image"] = img_dict
-
+        out["Image"] = get_image_info(core, error_value)
     if position:
-        pos = {"X": error_value, "Y": error_value, "Focus": error_value}
-        with suppress(Exception):
-            pos["X"] = core.getXPosition()
-            pos["Y"] = core.getYPosition()
-        with suppress(Exception):
-            pos["Focus"] = core.getPosition()
-        out["Position"] = pos
-
+        out["Position"] = get_position(core, error_value)
     if autofocus:
-        out["AutoFocus"] = {
-            "CurrentFocusScore": core.getCurrentFocusScore(),
-            "LastFocusScore": core.getLastFocusScore(),
-        }
-        try:
-            out["AutoFocus"]["AutoFocusOffset"] = core.getAutoFocusOffset()
-        except Exception:
-            out["AutoFocus"]["AutoFocusOffset"] = error_value
-
+        out["AutoFocus"] = get_autofocus(core, error_value)
     if pixel_size_configs:
-        px: dict = {"Current": core.getCurrentPixelSizeConfig()}
-        for px_cfg_name in core.getAvailablePixelSizeConfigs():
-            px_cfg_info: dict = {}
-            for dev, prop, val in core.getPixelSizeConfigData(px_cfg_name):
-                px_cfg_info.setdefault(dev, {})[prop] = val
-            px_cfg_info["PixelSizeUm"] = core.getPixelSizeUmByID(px_cfg_name)
-            px_cfg_info["PixelSizeAffine"] = core.getPixelSizeAffineByID(px_cfg_name)
-            px[px_cfg_name] = px_cfg_info
-
-        out["PixelSizeConfig"] = px
-
+        out["PixelSizeConfig"] = get_pix_size_config(core)
     if device_types:
-        out["DeviceTypes"] = {
-            dev_name: {
-                "Type": core.getDeviceType(dev_name).name,
-                "Description": core.getDeviceDescription(dev_name),
-                "Adapter": core.getDeviceName(dev_name),
-            }
-            for dev_name in core.getLoadedDevices()
-        }
+        out["DeviceTypes"] = get_device_types(core)
     return out
 
 
-import time
+def get_device_state(
+    core: CMMCorePlus, cached: bool = True, error_value: Any = None
+) -> dict[str, dict[str, Any]]:
+    # this actually appears to be faster than getSystemStateCache
+    getProp = core.getPropertyFromCache if cached else core.getProperty
+    device_state: dict = {}
+    for dev in core.getLoadedDevices():
+        dd = device_state.setdefault(dev, {})
+        for prop in core.getDevicePropertyNames(dev):
+            try:
+                val = getProp(dev, prop)
+            except Exception:
+                val = error_value
+            dd[prop] = val
+    return device_state
 
-from rich import print
 
-_start = time.perf_counter_ns()
-x = state(core)
-fin = time.perf_counter_ns() - _start
-print(x)
-print(fin / 1000000, "ms")
+def get_system_info(core: CMMCorePlus) -> SystemInfoDict:
+    return {  # type: ignore
+        key: getattr(core, f"get{key}")()
+        for key in sorted(SystemInfoDict.__annotations__)
+    }
+
+
+def get_system_status(core: CMMCorePlus) -> SystemStatusDict:
+    out = {
+        "autoShutter": core.getAutoShutter(),
+        "shutterOpen": core.getShutterOpen(),
+    }
+    out.update(
+        {
+            key: getattr(core, key)()
+            for key in sorted(SystemStatusDict.__annotations__)
+            if key not in {"autoShutter", "shutterOpen"}
+        }
+    )
+    return cast("SystemStatusDict", out)
+
+
+def get_config_groups(
+    core: CMMCorePlus,
+    config_groups: bool | Sequence[str | Literal["[Channel]"]],
+    cached: bool = True,
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(config_groups, (list, tuple, set)):
+        config_groups = core.getAvailableConfigGroups()
+
+    getState = core.getConfigGroupStateFromCache if cached else core.getConfigGroupState
+    curGrp = core.getCurrentConfigFromCache if cached else core.getCurrentConfig
+    cfg_group_dict: dict = {}
+    for grp in config_groups:
+        if grp == "[Channel]":
+            # special case for accessing channel group
+            grp = core.getChannelGroup()
+
+        grp_dict = cfg_group_dict.setdefault(grp, {})
+        grp_dict["Current"] = curGrp(grp)
+
+        for dev, prop, val in getState(grp):
+            grp_dict.setdefault(dev, {})[prop] = val
+    return cfg_group_dict
+
+
+def get_image_info(core: CMMCorePlus, error_value: Any = None) -> ImageDict:
+    img_dict = {}
+    for key in sorted(ImageDict.__annotations__):
+        try:
+            val = getattr(core, f"get{key}")()
+        except Exception:
+            val = error_value
+        img_dict[key] = val
+    return cast("ImageDict", img_dict)
+
+
+def get_position(core: CMMCorePlus, error_value: Any = None) -> PositionDict:
+    pos: PositionDict = {"X": error_value, "Y": error_value, "Focus": error_value}
+    with suppress(Exception):
+        pos["X"] = core.getXPosition()
+        pos["Y"] = core.getYPosition()
+    with suppress(Exception):
+        pos["Focus"] = core.getPosition()
+    return pos
+
+
+def get_autofocus(core: CMMCorePlus, error_value: Any = None) -> AutoFocusDict:
+    out: AutoFocusDict = {
+        "CurrentFocusScore": core.getCurrentFocusScore(),
+        "LastFocusScore": core.getLastFocusScore(),
+        "AutoFocusOffset": error_value,
+    }
+    with suppress(Exception):
+        out["AutoFocusOffset"] = core.getAutoFocusOffset()
+    return out
+
+
+def get_pix_size_config(core: CMMCorePlus) -> dict[str, str | PixelSizeConfigDict]:
+    # the Current value is a string, all the rest are PixelSizeConfigDict
+    px: dict = {"Current": core.getCurrentPixelSizeConfig()}
+    for px_cfg_name in core.getAvailablePixelSizeConfigs():
+        px_cfg_info: dict = {}
+        for dev, prop, val in core.getPixelSizeConfigData(px_cfg_name):
+            px_cfg_info.setdefault(dev, {})[prop] = val
+        px_cfg_info["PixelSizeUm"] = core.getPixelSizeUmByID(px_cfg_name)
+        px_cfg_info["PixelSizeAffine"] = core.getPixelSizeAffineByID(px_cfg_name)
+        px[px_cfg_name] = px_cfg_info
+    return px
+
+
+def get_device_types(core: CMMCorePlus) -> dict[str, DeviceTypeDict]:
+    return {
+        dev_name: {
+            "Type": core.getDeviceType(dev_name).name,
+            "Description": core.getDeviceDescription(dev_name),
+            "Adapter": core.getDeviceName(dev_name),
+        }
+        for dev_name in core.getLoadedDevices()
+    }
