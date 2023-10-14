@@ -14,6 +14,6 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /workspaces/pymmcore-plus/
 
-RUN pip install -e .
+# RUN pip install -e .
 
-RUN mmcore install
+# RUN mmcore install
