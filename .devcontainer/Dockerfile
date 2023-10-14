@@ -11,3 +11,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
     libxcb-render-util0 libxcb-xinerama0 libxcb-xinput0 libxcb-xfixes0 \
     x11-utils libxcb-cursor0 xvfb
+
+RUN pip install -e .
+
+RUN mmcore install
