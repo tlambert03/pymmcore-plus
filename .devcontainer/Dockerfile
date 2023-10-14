@@ -12,6 +12,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     libxcb-render-util0 libxcb-xinerama0 libxcb-xinput0 libxcb-xfixes0 \
     x11-utils libxcb-cursor0 xvfb
 
+WORKDIR /workspaces/pymmcore-plus/
+
 RUN pip install -e .
 
 RUN mmcore install
