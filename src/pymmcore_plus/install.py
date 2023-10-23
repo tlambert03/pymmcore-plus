@@ -10,7 +10,7 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from platform import system
-from typing import Iterator
+from typing import Callable, Iterator
 from urllib.request import urlopen, urlretrieve
 
 import typer
@@ -60,19 +60,21 @@ def _win_install(exe: Path, dest: Path) -> None:
         subprocess.run(cmd, check=True)
 
 
-def _mac_install(dmg: Path, dest: Path) -> None:
+def _mac_install(dmg: Path, dest: Path, log_msg: Callable[[str], None] = print) -> None:
     """Install Micro-Manager `dmg` to `dest`."""
     # with progress bar, mount dmg
+    log_msg(f"Mounting {dmg.name} ...")
     with _spinner(f"Mounting {dmg.name} ..."):
         proc = subprocess.run(
             ["hdiutil", "attach", "-nobrowse", str(dmg)],
             capture_output=True,
         )
         if proc.returncode != 0:  # pragma: no cover
-            print(f"\n[bold red]Error mounting {dmg.name}:\n{proc.stderr.decode()}")
+            log_msg(f"\n[bold red]Error mounting {dmg.name}:\n{proc.stderr.decode()}")
             sys.exit(1)
 
     # with progress bar, mount dmg
+    log_msg(f"Installing to {dest} ...")
     with _spinner(f"Installing to {dest} ..."):
         # get mount point
         mount = proc.stdout.splitlines()[-1].split()[-1].decode()
@@ -80,7 +82,7 @@ def _mac_install(dmg: Path, dest: Path) -> None:
             try:
                 src = next(Path(mount).glob("Micro-Manager*"))
             except StopIteration:  # pragma: no cover
-                print(
+                log_msg(
                     "[bold red]\nError: Could not find Micro-Manager in dmg.\n"
                     "Please report this at https://github.com/pymmcore-plus/"
                     "pymmcore-plus/issues/new",
@@ -94,7 +96,7 @@ def _mac_install(dmg: Path, dest: Path) -> None:
             )
 
     # fix gatekeeper ... requires password
-    print("[green](Your password may be required to install Micro-manager.)")
+    log_msg("[green](Your password may be required to install Micro-manager.)")
     cmd = ["sudo", "xattr", "-r", "-d", "com.apple.quarantine", str(install_path)]
     subprocess.run(cmd, check=True)
 
@@ -118,7 +120,12 @@ def _available_versions() -> dict[str, str]:
     }
 
 
-def _download_url(url: str, output_path: Path) -> None:
+def _download_url(
+    url: str,
+    output_path: Path,
+    report_hook: Callable[[float, float, float], None] | None = None,
+    log_msg: Callable[[str], None] = print,
+) -> None:
     """Download `url` to `output_path` with a nice progress bar."""
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -136,16 +143,23 @@ def _download_url(url: str, output_path: Path) -> None:
         pbar.update(task_id, total=int(total_size))
         pbar.start_task(task_id)
         pbar.update(task_id, advance=block_size)
+        if report_hook:
+            report_hook(count, block_size, total_size)
 
-    print(f"[bold blue]Downloading {url} ...")
+    log_msg(f"[bold blue]Downloading {url} ...")
     with pbar:
         urlretrieve(url=url, filename=output_path, reporthook=hook)
 
 
-def install(dest: Path, release: str) -> None:
+def install(
+    dest: Path = USER_DATA_MM_PATH,
+    release: str = "latest",
+    report_hook: Callable[[float, float, float], None] | None = None,
+    log_msg: Callable[[str], None] = print,
+) -> None:
     """Install Micro-Manager to `dest`."""
     if PLATFORM not in ("Darwin", "Windows"):  # pragma: no cover
-        print(f":x: [bold red]Unsupported platform: {PLATFORM!r}")
+        log_msg(f":x: [bold red]Unsupported platform: {PLATFORM!r}")
         raise sys.exit(1)
 
     if release == "latest":
@@ -166,9 +180,11 @@ def install(dest: Path, release: str) -> None:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         installer = Path(tmpdir) / url.split("/")[-1]
-        _download_url(url=url, output_path=installer)
+        _download_url(
+            url=url, output_path=installer, log_msg=log_msg, report_hook=report_hook
+        )
         if PLATFORM == "Darwin":
-            _mac_install(installer, dest)
+            _mac_install(installer, dest, log_msg=log_msg)
         elif PLATFORM == "Windows":
             # for windows, we need to know the latest version
             filename = _get_download_name(url)
@@ -176,83 +192,4 @@ def install(dest: Path, release: str) -> None:
             filename = filename.replace(".exe", "")
             _win_install(installer, dest / filename)
 
-    print(f":sparkles: [bold green]Installed to {dest}![/bold green] :sparkles:")
-
-
-def _existing_dir(string: str) -> Path:
-    path = Path(string)
-    if not path.is_dir():
-        raise NotADirectoryError(string)
-    return path
-
-
-def _version(value: str) -> str:
-    if not _version_regex.match(value):
-        raise ValueError(
-            f"Invalid version: {value}. Must be of form x.y.z with x y and z in 0-9"
-        )
-    return value
-
-
-def _release(value: str) -> str:
-    if value.lower() == "latest":
-        return "latest"
-    if len(value) != 8:
-        raise ValueError(f"Invalid date: {value}. Must be eight digits.")
-    return str(value)
-
-
-def main() -> None:  # pragma: no cover
-    """Main entry point for the console_scripts."""
-    import argparse
-
-    from rich.panel import Panel
-
-    print(
-        Panel(
-            ':exclamation: [bold red]"python -m pymmcore_plus.install" is deprecated. '
-            'Use "mmcore install" instead :eyes:',
-            border_style="red",
-        )
-    )
-
-    parser = argparse.ArgumentParser(description="MM Device adapter installer.")
-    parser.add_argument(
-        "-d",
-        "--dest",
-        default=USER_DATA_MM_PATH,
-        type=_existing_dir,
-        help=f"Directory in which to install (default: {USER_DATA_MM_PATH})",
-    )
-
-    parser.add_argument(  # unused
-        "-v",
-        "--version",
-        metavar="VERSION",
-        type=_version,
-        default="2.0.1",
-        help="Version number. e.g. 2.0.1 - ignored if release=latest (default: 2.0.1)",
-    )
-    parser.add_argument(
-        "-r",
-        "--release",
-        metavar="DATE",
-        type=_release,
-        default="latest",
-        help='8 digit date (YYYYMMDD) of MM nightly build to fetch, or "latest" '
-        "(default: latest)",
-    )
-    parser.add_argument(
-        "-y",
-        "--yes",
-        action="store_true",
-        default=False,
-        help="Say yes to all prompts. (no input mode).",
-    )
-
-    args = parser.parse_args()
-    install(Path(args.dest), args.release)
-
-
-if __name__ == "__main__":
-    main()
+    log_msg(f":sparkles: [bold green]Installed to {dest}![/bold green] :sparkles:")
