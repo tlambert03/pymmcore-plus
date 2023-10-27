@@ -18,6 +18,7 @@ from typing import (
     Callable,
     Iterable,
     Iterator,
+    MutableMapping,
     NamedTuple,
     Pattern,
     Sequence,
@@ -42,6 +43,7 @@ from ._constants import (
     PixelType,
     PropertyType,
 )
+from ._context import Context
 from ._device import Device
 from ._metadata import Metadata
 from ._property import DeviceProperty
@@ -203,7 +205,8 @@ class CMMCorePlus(pymmcore.CMMCore):
             self.setDeviceAdapterSearchPaths(adapter_paths)
 
         self._events = _get_auto_core_callback_class()()
-        self._callback_relay = MMCallbackRelay(self.events)
+        self._context = Context()
+        self._callback_relay = MMCallbackRelay(self.events, self._context)
         self.registerCallback(self._callback_relay)
 
         self._mda_runner = MDARunner()
@@ -2073,6 +2076,7 @@ class CMMCorePlus(pymmcore.CMMCore):
         if before != after:
             for i, val in enumerate(after):
                 self.events.propertyChanged.emit(device, properties[i], val)
+                self._context[f"property.{device}.{properties[i]}"] = val
 
     @contextmanager
     def setContext(self, **kwargs: Any) -> Iterator[None]:
@@ -2200,8 +2204,9 @@ for name in (
 class _MMCallbackRelay(pymmcore.MMEventCallback):
     """Relays MMEventCallback methods to CMMCorePlus.signal."""
 
-    def __init__(self, emitter: CMMCoreSignaler):
+    def __init__(self, emitter: CMMCoreSignaler, context: MutableMapping):
         self._emitter = emitter
+        self._context = context
         super().__init__()
 
     @staticmethod
@@ -2211,12 +2216,21 @@ class _MMCallbackRelay(pymmcore.MMEventCallback):
         def reemit(self: _MMCallbackRelay, *args: Any) -> None:
             try:
                 getattr(self._emitter, sig_name).emit(*args)
+                self._update_context(sig_name, args)
             except Exception as e:
                 logger.error(
                     "Exception occurred in MMCorePlus callback %r: %s", sig_name, e
                 )
 
         return reemit
+
+    def _update_context(self, sig_name: str, args: tuple) -> None:
+        if sig_name == "propertyChanged":
+            dev, prop, val = args
+            props = self._context.setdefault("property", {})
+            dev = props.setdefault(dev, {})
+            print(prop)
+            dev[prop] = val
 
 
 MMCallbackRelay = type(
