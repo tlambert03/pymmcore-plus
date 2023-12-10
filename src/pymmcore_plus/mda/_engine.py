@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
     from pymmcore_plus.core import CMMCorePlus
 
-    from ._protocol import PImagePayload
+    PImagePayload = tuple[NDArray, MDAEvent, dict]
 
     # currently matching keys from metadata from AcqEngJ
     SummaryMetadata = TypedDict(
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     )
 
 
-class MDAEngine(PMDAEngine):
+class MDAEngine(PMDAEngine[MDAEvent, MDASequence]):
     """The default MDAengine that ships with pymmcore-plus.
 
     This implements the [`PMDAEngine`][pymmcore_plus.mda.PMDAEngine] protocol, and
@@ -116,6 +116,9 @@ class MDAEngine(PMDAEngine):
             if p.sequence and p.sequence.grid_plan:
                 p.sequence.grid_plan.fov_height = fov_height
                 p.sequence.grid_plan.fov_width = fov_width
+
+    def event_start_time(self, event: MDAEvent) -> float | None:
+        return event.min_start_time
 
     def setup_event(self, event: MDAEvent) -> None:
         """Set the system hardware (XY, Z, channel, exposure) as defined in the event.

@@ -2,19 +2,17 @@ from __future__ import annotations
 
 import time
 import warnings
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Tuple
+from typing import TYPE_CHECKING, Generic, Iterable, Iterator, Tuple
 from unittest.mock import MagicMock
 
 from useq import MDASequence
 
 from pymmcore_plus._logger import exceptions_logged, logger
 
-from ._protocol import PMDAEngine
+from ._protocol import EventType, PMDAEngine
 from .events import PMDASignaler, _get_auto_MDA_callback_class
 
 if TYPE_CHECKING:
-    from useq import MDAEvent
-
     from ._engine import MDAEngine
 
 MSG = (
@@ -39,7 +37,7 @@ class GeneratorMDASequence(MDASequence):
         return "GeneratorMDASequence()"
 
 
-class MDARunner:
+class MDARunner(Generic[EventType]):
     """Object that executes a multi-dimensional experiment using an MDAEngine.
 
     This object is available at [`CMMCorePlus.mda`][pymmcore_plus.CMMCorePlus.mda].
@@ -148,7 +146,7 @@ class MDARunner:
             self._paused = not self._paused
             self._signals.sequencePauseToggled.emit(self._paused)
 
-    def run(self, events: Iterable[MDAEvent]) -> None:
+    def run(self, events: Iterable[EventType]) -> None:
         """Run the multi-dimensional acquistion defined by `sequence`.
 
         Most users should not use this directly as it will block further
@@ -158,8 +156,8 @@ class MDARunner:
 
         Parameters
         ----------
-        events : Iterable[MDAEvent]
-            An iterable of `useq.MDAEvents` objects to execute.
+        events : Iterable[Any]
+            An iterable of event objects to execute.
         """
         error = None
         sequence = events if isinstance(events, MDASequence) else GeneratorMDASequence()
@@ -173,15 +171,15 @@ class MDARunner:
         if error is not None:
             raise error
 
-    def _run(self, engine: PMDAEngine, events: Iterable[MDAEvent]) -> None:
+    def _run(self, engine: PMDAEngine, events: Iterable[EventType]) -> None:
         """Main execution of events, inside the try/except block of `run`."""
         teardown_event = getattr(engine, "teardown_event", lambda e: None)
         event_iterator = getattr(engine, "event_iterator", iter)
-        _events: Iterator[MDAEvent] = event_iterator(events)
+        _events: Iterator[EventType] = event_iterator(events)
 
         for event in _events:
             # If cancelled break out of the loop
-            if self._wait_until_event(event) or not self._running:
+            if self._wait_until_event(event, engine) or not self._running:
                 break
 
             logger.info("%s", event)
@@ -246,13 +244,15 @@ class MDARunner:
             return True
         return False
 
-    def _wait_until_event(self, event: MDAEvent) -> bool:
+    def _wait_until_event(self, event: EventType, engine: PMDAEngine) -> bool:
         """Wait until the event's min start time, checking for pauses cancellations.
 
         Parameters
         ----------
-        event : MDAEvent
+        event : Any
             The event to wait for.
+        engine : PMDAEngine
+            The engine that will execute the event.
 
         Returns
         -------
@@ -270,12 +270,8 @@ class MDARunner:
             if self._check_canceled():
                 return True
 
-        # FIXME: this is actually the only place where the runner assumes our event is
-        # an MDAevent.  For everything else, the engine is technically the only thing
-        # that cares about the event time.
-        # So this whole method could potentially be moved to the engine.
-        if event.min_start_time:
-            go_at = event.min_start_time + self._paused_time
+        if start_time := engine.event_start_time(event):
+            go_at = start_time + self._paused_time
             # We need to enter a loop here checking paused and canceled.
             # otherwise you'll potentially wait a long time to cancel
             to_go = go_at - self._time_elapsed()
@@ -310,12 +306,3 @@ class MDARunner:
 
         logger.info("MDA Finished: %s", sequence)
         self._signals.sequenceFinished.emit(sequence)
-
-
-def _assert_handler(handler: Any) -> None:
-    if (
-        not hasattr(handler, "start")
-        or not hasattr(handler, "finish")
-        or not hasattr(handler, "put")
-    ):
-        raise TypeError("Handler must have start, finish, and put methods.")

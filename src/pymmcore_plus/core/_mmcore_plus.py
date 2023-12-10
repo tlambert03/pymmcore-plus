@@ -207,7 +207,7 @@ class CMMCorePlus(pymmcore.CMMCore):
         self._callback_relay = MMCallbackRelay(self.events)
         self.registerCallback(self._callback_relay)
 
-        self._mda_runner = MDARunner()
+        self._mda_runner: MDARunner[MDAEvent] = MDARunner()
         self._mda_runner.set_engine(MDAEngine(self))
 
         self._objective_regex: Pattern = _OBJDEV_REGEX
@@ -1403,7 +1403,7 @@ class CMMCorePlus(pymmcore.CMMCore):
                 )
 
     @property
-    def mda(self) -> MDARunner:
+    def mda(self) -> MDARunner[MDAEvent]:
         """Return the `MDARunner` for this `CMMCorePlus` instance.
 
         :sparkles: *This method is new in `CMMCorePlus`.*

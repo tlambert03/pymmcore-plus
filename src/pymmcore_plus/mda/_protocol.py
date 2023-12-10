@@ -1,34 +1,44 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Mapping, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Mapping, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
     from typing import Iterable, Iterator
 
     from numpy.typing import NDArray
-    from useq import MDAEvent, MDASequence
-
-    PImagePayload = tuple[NDArray, MDAEvent, dict]
 
 
 # NOTE: This whole thing could potentially go in useq-schema
 # as it makes no assumptions about pymmcore-plus
 
 
+SequenceType = TypeVar("SequenceType", contravariant=True)
+EventType = TypeVar("EventType")
+
+
 @runtime_checkable
-class PMDAEngine(Protocol):
+class PMDAEngine(Protocol[EventType, SequenceType]):
     """Protocol that all MDA engines must implement."""
 
+    def event_start_time(self, event: EventType) -> float | None:
+        """Return the start time of `event` in seconds.
+
+        This method is called before `setup_event` to determine the
+        start time of the event.  The default implementation is to
+        return `event.start_time`.
+        """
+        return None
+
     @abstractmethod
-    def setup_sequence(self, sequence: MDASequence) -> None | Mapping[str, Any]:
+    def setup_sequence(self, sequence: SequenceType) -> None | Mapping[str, Any]:
         """Setup state of system (hardware, etc.) before an MDA is run.
 
         This method is called once at the beginning of a sequence.
         """
 
     @abstractmethod
-    def setup_event(self, event: MDAEvent) -> None:
+    def setup_event(self, event: EventType) -> None:
         """Prepare state of system (hardware, etc.) for `event`.
 
         This method is called before each event in the sequence.  It is
@@ -40,7 +50,7 @@ class PMDAEngine(Protocol):
         """
 
     @abstractmethod
-    def exec_event(self, event: MDAEvent) -> Iterable[PImagePayload]:
+    def exec_event(self, event: EventType) -> Iterable[tuple[NDArray, EventType, dict]]:
         """Execute `event`.
 
         This method is called after `setup_event` and is responsible for
@@ -54,7 +64,7 @@ class PMDAEngine(Protocol):
         """
         # TODO: nail down a spec for the return object.
 
-    def event_iterator(self, events: Iterable[MDAEvent]) -> Iterator[MDAEvent]:
+    def event_iterator(self, events: Iterable[EventType]) -> Iterator[EventType]:
         """Wrapper on the event iterator.
 
         **Optional.**
@@ -67,7 +77,7 @@ class PMDAEngine(Protocol):
         event iteration if used incorrectly.
         """
 
-    def teardown_event(self, event: MDAEvent) -> None:
+    def teardown_event(self, event: EventType) -> None:
         """Teardown state of system (hardware, etc.) after `event`.
 
         **Optional.**
@@ -77,7 +87,7 @@ class PMDAEngine(Protocol):
         the event has been executed.
         """
 
-    def teardown_sequence(self, sequence: MDASequence) -> None:
+    def teardown_sequence(self, sequence: SequenceType) -> None:
         """Perform any teardown required after the sequence has been executed.
 
         **Optional.**
