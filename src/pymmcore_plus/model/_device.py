@@ -302,13 +302,27 @@ class Device(CoreObject):
         self._assert_is(DeviceType.Hub)
         return tuple(core.getLoadedPeripheralDevices(self.name))
 
-    def available_peripherals(self, model: Microscope) -> Iterable[AvailableDevice]:
+    def available_peripherals(
+        self, model: Microscope, core: CMMCorePlus
+    ) -> Iterable[AvailableDevice]:
         """Return all available devices that belong to this hub that aren't in model."""
         self._assert_is(DeviceType.Hub)
 
+        peripherals = list(model.available_devices)
+        for child in core.getInstalledDevices(self.name):
+            peripherals.append(
+                AvailableDevice(
+                    library=core.getDeviceLibrary(child),
+                    adapter_name=core.getDeviceName(child),
+                    description=core.getDeviceDescription(child),
+                    device_type=DeviceType(core.getDeviceType(child)),
+                    library_hub=self,  # type: ignore
+                )
+            )
+
         # get all available devices that belong to this hub
         # and have not been loaded
-        for dev in model.available_devices:
+        for dev in peripherals:
             if (
                 # has a parent hub
                 (hub := dev.library_hub)
