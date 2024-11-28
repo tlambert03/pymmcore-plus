@@ -28,7 +28,7 @@ repos:
       - id: mypy
         files: "^src/"
         additional_dependencies:
-          - pymmcore >=10.7.0.71.0
+          - pymmcore-nano
           - useq-schema >= 0.5.1
           - psygnal
           - typer

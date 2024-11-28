@@ -5,12 +5,13 @@ from typing import get_args
 from unittest.mock import Mock, call
 
 import pytest
-from pymmcore import g_Keyword_Label as LABEL
-from pymmcore import g_Keyword_State as STATE
 
-from pymmcore_plus import CMMCorePlus
+from pymmcore_plus import CMMCorePlus, Keyword
 from pymmcore_plus._util import MMCORE_PLUS_SIGNALS_BACKEND
 from pymmcore_plus.core.events import CMMCoreSignaler, PCoreSignaler
+
+LABEL = Keyword.Label.value
+STATE = Keyword.State.value
 
 Signalers = [CMMCoreSignaler]
 try:

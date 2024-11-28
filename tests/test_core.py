@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, call, patch
 
 import numpy as np
 import psygnal
-import pymmcore
+import pymmcore_nano as pymmcore
 import pytest
-from pymmcore import CMMCore, PropertySetting
+from pymmcore_nano import CMMCore, PropertySetting
 from useq import MDASequence
 
 from pymmcore_plus import (

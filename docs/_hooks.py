@@ -72,7 +72,7 @@ def on_page_markdown(md: str, page: "Page", config: "MkDocsConfig", files) -> st
 
 def _get_core_and_plus_members() -> tuple[set, set]:
     """Return member names found only in CMMCore and those in CMMCorePlus."""
-    from pymmcore import CMMCore
+    from pymmcore_nano import CMMCore
 
     from pymmcore_plus import CMMCorePlus
 

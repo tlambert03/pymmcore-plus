@@ -15,7 +15,7 @@ from textwrap import dedent
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Callable, NamedTuple, TypeVar, overload
 
-import pymmcore
+import pymmcore_nano as pymmcore
 from psygnal import SignalInstance
 
 from pymmcore_plus._logger import current_logfile, logger
@@ -31,6 +31,7 @@ from ._constants import (
     DeviceInitializationState,
     DeviceType,
     FocusDirection,
+    Keyword,
     PixelType,
     PropertyType,
 )
@@ -101,8 +102,9 @@ _OFFSET_DEVICES: dict[tuple[str, str], str] = {
     # ("FocalPoint", "FocalPoint"): "",
 }
 
-STATE = pymmcore.g_Keyword_State
-LABEL = pymmcore.g_Keyword_Label
+
+STATE = Keyword.State.value
+LABEL = Keyword.Label.value
 STATE_PROPS = (STATE, LABEL)
 UNNAMED_PRESET = "NewPreset"
 
