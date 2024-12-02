@@ -3,8 +3,9 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, TypedDict
 
+from pymmcore_nano import g_Keyword_Label, g_Keyword_State
 
-from ._constants import DeviceType, PropertyType, Keyword
+from ._constants import DeviceType, PropertyType
 from .events._device_signal_view import _DevicePropValueSignal
 
 if TYPE_CHECKING:
@@ -148,10 +149,10 @@ class DeviceProperty:
         # https://github.com/micro-manager/mmCoreAndDevices/issues/172
         allowed = self._mmc.getAllowedPropertyValues(self.device, self.name)
         if not allowed and self.deviceType() is DeviceType.StateDevice:
-            if self.name == Keyword.State:
+            if self.name == g_Keyword_State:
                 n_states = self._mmc.getNumberOfStates(self.device)
                 allowed = tuple(str(i) for i in range(n_states))
-            elif self.name == Keyword.State:
+            elif self.name == g_Keyword_Label:
                 allowed = self._mmc.getStateLabels(self.device)
         return allowed
 

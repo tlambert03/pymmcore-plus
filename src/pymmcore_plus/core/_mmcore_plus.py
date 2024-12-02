@@ -31,7 +31,6 @@ from ._constants import (
     DeviceInitializationState,
     DeviceType,
     FocusDirection,
-    Keyword,
     PixelType,
     PropertyType,
 )
@@ -102,9 +101,8 @@ _OFFSET_DEVICES: dict[tuple[str, str], str] = {
     # ("FocalPoint", "FocalPoint"): "",
 }
 
-
-STATE = Keyword.State.value
-LABEL = Keyword.Label.value
+STATE = pymmcore.g_Keyword_State
+LABEL = pymmcore.g_Keyword_Label
 STATE_PROPS = (STATE, LABEL)
 UNNAMED_PRESET = "NewPreset"
 
@@ -1865,31 +1863,6 @@ class CMMCorePlus(pymmcore.CMMCore):
         """
         super().definePixelSizeConfig(*args, **kwargs)
         self.events.pixelSizeChanged.emit(0.0)
-
-    def getMultiROI(  # type: ignore [override]
-        self, *_: Any
-    ) -> tuple[list[int], list[int], list[int], list[int]]:
-        """Get multiple ROIs from the current camera device.
-
-        Will fail if the camera does not support multiple ROIs. Will return empty
-        vectors if multiple ROIs are not currently being used.
-
-        **Why Override?** So that the user doesn't need to pass in four empty
-        pymmcore.UnsignedVector() objects.
-        """
-        if _:
-            warnings.warn(  # pragma: no cover
-                "Unlike pymmcore, CMMCorePlus.getMultiROI does not require arguments."
-                "Arguments are ignored.",
-                stacklevel=2,
-            )
-
-        xs = pymmcore.UnsignedVector()  # type: ignore [attr-defined]
-        ys = pymmcore.UnsignedVector()  # type: ignore [attr-defined]
-        ws = pymmcore.UnsignedVector()  # type: ignore [attr-defined]
-        hs = pymmcore.UnsignedVector()  # type: ignore [attr-defined]
-        super().getMultiROI(xs, ys, ws, hs)
-        return list(xs), list(ys), list(ws), list(hs)
 
     @overload
     def setROI(self, x: int, y: int, width: int, height: int) -> None: ...

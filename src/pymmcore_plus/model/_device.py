@@ -84,7 +84,7 @@ class Device(CoreObject):
     # StateDevice only
     labels: tuple[str, ...] = field(default_factory=tuple)
     # StageDevice only
-    focus_direction: FocusDirection = FocusDirection.Unknown
+    focus_direction: FocusDirection = FocusDirection.FocusDirectionUnknown
     # HubDevice only
     # These are adapter_name (NOT loaded device labels) of child devices
     # from the same library that can be loaded into this hub.

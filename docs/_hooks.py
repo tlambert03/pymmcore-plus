@@ -88,7 +88,7 @@ def _get_core_and_plus_members() -> tuple[set, set]:
 def _build_table() -> str:
     """This function builds the markdown table for the CMMCorePlus API page."""
     import griffe
-    import pymmcore
+    import pymmcore_nano as pymmcore
 
     import pymmcore_plus
 
