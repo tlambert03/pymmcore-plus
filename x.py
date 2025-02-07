@@ -31,8 +31,8 @@ def main() -> None:
         },
     }
     # Open the store (blocking until ready).
-    store = ts.open(spec, open=True, create=True).result()
-
+    store = ts.open(spec, create=True, delete_existing=True).result()
+    write_futures = []
     total_rounds: int = 20
     start_total = time.perf_counter()
     for i in range(total_rounds):
@@ -48,11 +48,14 @@ def main() -> None:
         t0 = time.perf_counter()
         # Write the new frame into the newly allocated slice.
         # (We write to the last time index, i.e. index new_time_length - 1.)
-        write_future = store[new_time_length - 1, ...].write(data)
-        write_future.result()  # Wait for the write to complete.
+        write_futures.append(store[new_time_length - 1, ...].write(data))
+        # write_future.result()  # Wait for the write to complete.
         t1 = time.perf_counter()
         print(f"round {i}, append time: {t1 - t0}")
 
+    # Wait for all writes to complete.
+    for write_future in write_futures:
+        write_future.result()
     end_total = time.perf_counter()
     print(f"total time: {end_total - start_total}")
 

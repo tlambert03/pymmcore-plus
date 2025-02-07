@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, TypedDict
 
+import numpy as np
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Required, TypeAlias, Unpack
@@ -28,33 +30,38 @@ class Codec(TypedDict, total=False):
     """
 
 
-DType: TypeAlias = Literal[
-    "bool",
-    "char",
-    "byte",
-    "int4",
-    "int8",
-    "uint8",
-    "int16",
-    "uint16",
-    "int32",
-    "uint32",
-    "int64",
-    "uint64",
-    "float8_e4m3fn",
-    "float8_e4m3fnuz",
-    "float8_e4m3b11fnuz",
-    "float8_e5m2",
-    "float8_e5m2fnuz",
-    "float16",
+Zarr3DataType: TypeAlias = Literal[
     "bfloat16",
+    "bool",
+    "complex128",
+    "complex64",
+    "float16",
     "float32",
     "float64",
-    "complex64",
-    "complex128",
-    "string",
+    "int4",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+]
+
+# super set of Zarr3DataType
+DType: TypeAlias = Literal[
+    Zarr3DataType,
     "ustring",
+    "string",
     "json",
+    "float8_e5m2fnuz",
+    "float8_e5m2",
+    "float8_e4m3fnuz",
+    "float8_e4m3fn",
+    "float8_e4m3b11fnuz",
+    "char",
+    "byte",
 ]
 
 
@@ -106,7 +113,7 @@ class _TensorStoreSpec(TypedDict, total=False):
     """Driver identifier"""
     context: Context | None
     """Specifies context resources that augment/override the parent context."""
-    dtype: DType
+    dtype: DType | np.typing.DTypeLike
     """Specifies the data type."""
     rank: int
     """Specifies the rank of the TensorStore.
@@ -148,7 +155,7 @@ class _KeyValueStoreBackedChunkDriverSpec(_TensorStoreSpec, total=False):
     # driver: Required[Literal["n5", "neuroglancer_precomputed", "zarr", "zarr3"]]
     kvstore: KvStore | KvStoreUrl
     """Specifies the underlying storage mechanism."""
-    path: str
+    path: str | Path
     """Additional path within the KvStore specified by kvstore.
 
     This is joined as an additional "/"-separated path component after any path member
@@ -253,24 +260,78 @@ class _KeyValueStoreBackedChunkDriverSpec(_TensorStoreSpec, total=False):
     """
 
 
-Zarr3DataType: TypeAlias = Literal[
-    "bool",
-    "int4",
-    "int8",
-    "uint8",
-    "int16",
-    "uint16",
-    "int32",
-    "uint32",
-    "int64",
-    "uint64",
-    "float16",
-    "bfloat16",
-    "float32",
-    "float64",
-    "complex64",
-    "complex128",
-]
+class ZarrChunkConfiguration(TypedDict, total=False):
+    chunk_shape: Sequence[int]
+    """Chunk dimensions.
+
+    Specifies the chunk size for each dimension. Must have the same length as shape. If
+    not specified when creating a new array, the chunk dimensions are chosen
+    automatically according to the Schema.chunk_layout. If specified when creating a new
+    array, the chunk dimensions must be compatible with the Schema.chunk_layout. When
+    opening an existing array, the specified chunk dimensions must match the existing
+    chunk dimensions.
+    """
+
+
+class ZarrChunkGrid(TypedDict, total=False):
+    name: Literal["regular"]
+    configuration: ZarrChunkConfiguration
+
+
+class BloscCodecConfiguration(TypedDict, total=False):
+    cname: Literal["blosclz", "lz4", "lz4hc", "snappy", "zlib", "zstd"]  # lz4
+    clevel: int  # default: 5
+    shuffle: Literal["noshuffle", "shuffle", "bitshuffle"]
+    typesize: int  # [1, 255]
+    blocksize: int  # [0, inf]
+
+
+class BloscCodec(TypedDict, total=False):
+    """Specifies a single codec."""
+
+    name: Required[Literal["blosc"]]
+    configuration: BloscCodecConfiguration
+
+
+class ZstdCodecConfiguration(TypedDict, total=False):
+    level: int  # [-131072, 22] # default: 1
+
+
+class ZstdCodec(TypedDict, total=False):
+    """Specifies a single codec."""
+
+    name: Required[Literal["zstd"]]
+    configuration: ZstdCodecConfiguration
+
+
+class BytesCodecConfiguration(TypedDict, total=False):
+    endian: Literal["little", "big"]
+
+
+class BytesCodec(TypedDict, total=False):
+    """Fixed-size encoding for numeric types."""
+
+    name: Required[Literal["bytes"]]
+    configuration: BytesCodecConfiguration
+
+
+SingleCodec: TypeAlias = BytesCodec | BloscCodec | ZstdCodec
+CodecName: TypeAlias = Literal["blosc", "bytes", "crc32c", "gzip", "transpose", "zstd"]
+CodecItem: TypeAlias = CodecName | SingleCodec
+CodecChain: TypeAlias = list[CodecItem]
+"""Specifies a chain of codecs.
+
+Each chunk of the array is converted to its stored representation by a sequence of
+zero or more array -> array codecs, a single array -> bytes codec, and a sequence of
+zero or more bytes -> bytes codecs. While required in the actual zarr.json metadata,
+in the TensorStore spec it is permitted to omit the array -> bytes codec, in which
+case the array -> bytes codec is unconstrained when opening an existing array, and
+chosen automatically when creating a new array.
+
+Each codec is specified either by an object, or as a string. A plain string is
+equivalent to an object with the string as its name. For example, "crc32c" is
+equivalent to {"name": "crc32c"}.
+"""
 
 
 class Zarr3Metadata(TypedDict, total=False):
@@ -294,6 +355,33 @@ class Zarr3Metadata(TypedDict, total=False):
     """
     data_type: Zarr3DataType
     """Data type of the array."""
+    chunk_grid: ZarrChunkGrid
+    chunk_key_encoding: dict
+    fill_value: float | bool  # default: 0 or False
+    """Fill value for missing data."""
+    codecs: CodecChain
+    attributes: dict
+    """Specifies user-defined attributes.
+
+    Certain attributes are interpreted specially by TensorStore.
+
+    - `dimension_units`: Physical units corresponding to each dimension of the array.
+      Optional. If specified, the length must match the rank of the array. A value of
+      null indicates an unspecified unit, while a value of "" indicates a unitless
+      quantity. If omitted, equivalent to specify an array of all null values.
+
+    """
+    dimension_names: Sequence[str] | None
+    """
+    Specifies an optional name for each dimension.
+
+    Optional. If not specified when creating a new array (and also unspecified by the
+    Schema.domain), all dimensions are unlabeled (equivalent to specifying an empty
+    string for each dimension). Labels are specified in the same order as the shape
+    property. Note that this specifies the stored dimension labels. As with any
+    TensorStore driver, dimension labels may also be overridden by specifying a
+    transform.
+    """
 
 
 class Zarr3DriverKwargs(_KeyValueStoreBackedChunkDriverSpec, total=False):
@@ -319,37 +407,92 @@ TensorStoreSpec = (
 )
 
 
-def zarr3_create(
+def _path_kvstore(path: str | Path) -> KvStore | KvStoreUrl:
+    if "://" in str(path):
+        return str(path)
+
+    path = str(Path(path).expanduser().resolve())
+    return {"driver": "file", "path": str(path)}
+
+
+def _norm_dtype(dtype: np.typing.DTypeLike) -> DType:
+    # already a valid string
+    if isinstance(dtype, str) and dtype in DType.__args__:  # type: ignore
+        return dtype  # type: ignore
+
+    dtype = np.dtype(dtype).name
+    if dtype not in DType.__args__:  # type: ignore
+        raise ValueError(f"Invalid dtype: {dtype}")
+    return dtype  # type: ignore
+
+
+def create_zarr3(
     shape: Sequence[int],
+    dimension_names: Sequence[str] | None = None,
+    codecs: CodecItem | CodecChain | None = None,
     **kwargs: Unpack[Zarr3DriverKwargs],
 ) -> ts.Future[ts.TensorStore]:
     """Create a new Zarr3 TensorStore."""
-    kvstore: KvStore | KvStoreUrl
-    if path := kwargs.pop("path", None):
-        if "://" in str(path):
-            kvstore = str(path)
-        else:
-            path = str(Path(path).expanduser().resolve())
-            kvstore = {"driver": "file", "path": str(path)}
-    else:
-        kvstore = "memory://"
+    kvstore: KvStore | KvStoreUrl = "memory://"
+    if "path" in kwargs:
+        kvstore = _path_kvstore(kwargs.pop("path"))
+
+    dtype: DType = "float32"
+    if "dtype" in kwargs:
+        dtype = _norm_dtype(kwargs.pop("dtype"))
+
+    metadata: Zarr3Metadata = kwargs.pop("metadata", {})
+    metadata.setdefault("shape", shape)
+    if codecs is not None:
+        if not isinstance(codecs, (list, tuple)):
+            codecs = [codecs]
+        if "codecs" in metadata:
+            raise ValueError("Codecs already specified in metadata")
+        metadata["codecs"] = codecs
+
+    if dimension_names is not None:
+        if len(dimension_names) != len(shape):
+            raise ValueError(
+                f"dimension_names must have the same length as shape: {len(shape)}"
+            )
+        metadata["dimension_names"] = dimension_names
 
     spec: Zarr3DriverSpec = {
         "driver": "zarr3",
         "kvstore": kvstore,
         "create": True,
-        "dtype": "float32",
-        "metadata": {"shape": shape},
+        "dtype": dtype,
+        "metadata": metadata,
         **kwargs,
     }
     return ts.open(spec)
 
 
+def open_zarr3(
+    **kwargs: Unpack[Zarr3DriverKwargs],
+) -> ts.Future[ts.TensorStore]:
+    """Open an existing Zarr3 TensorStore."""
+    if "path" in kwargs:
+        kwargs["kvstore"] = _path_kvstore(kwargs.pop("path"))
+
+    spec: Zarr3DriverSpec = {"driver": "zarr3", **kwargs}
+    return ts.open(spec)
+
+
 if __name__ == "__main__":
     import tensorstore as ts
+    from rich import print
 
+    path = Path.home() / "Desktop" / "thing.zarr"
     print(
-        zarr3_create(
-            (4, 20, 20), path="~/Desktop/thing.zarr", delete_existing=True
+        create_zarr3(
+            shape=(4, 20, 20),
+            path=path,
+            codecs="blosc",
+            dimension_names=("time", "x", "y"),
+            dtype=np.int8,
+            delete_existing=True,
         ).result()
     )
+
+    print(open_zarr3(path=path).result())

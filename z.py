@@ -8,7 +8,7 @@ settings = aqz.StreamSettings(
     store_path=PATH,
     data_type=aqz.DataType.UINT16,
     version=aqz.ZarrVersion.V3,
-    max_threads=48,
+    max_threads=8,
 )
 
 NT = 10
