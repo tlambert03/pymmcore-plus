@@ -1,6 +1,7 @@
-from typing import Iterator, Tuple
+from collections.abc import Iterator
 
 import numpy as np
+
 from pymmcore_plus import CMMCorePlus, mock_sample
 
 core = CMMCorePlus()
@@ -9,7 +10,7 @@ core.loadSystemConfiguration()
 
 # decorate a function that yields numpy arrays with @mock_sample
 @mock_sample(mmcore=core, loop=True)  # (1)!
-def noisy_sample(shape: Tuple[int, int] = (10, 10)) -> Iterator[np.ndarray]:
+def noisy_sample(shape: tuple[int, int] = (10, 10)) -> Iterator[np.ndarray]:
     yield np.random.random(shape)
 
 

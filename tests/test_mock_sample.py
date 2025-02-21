@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from pymmcore_plus import CMMCorePlus, mock_sample
 
 

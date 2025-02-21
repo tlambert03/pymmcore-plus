@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager, ContextDecorator
 from functools import wraps
-from types import TracebackType
-from typing import TYPE_CHECKING, Any, Callable, Generic, Iterator, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar, overload
 from unittest.mock import patch
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from types import TracebackType
     from unittest.mock import _patch
 
     import numpy as np
@@ -102,9 +103,8 @@ class _MockSampleContextManager(_CorePatcher["np.ndarray"]):
 
 @overload
 def mock_sample(
-    func: Callable[P, Iterator[np.ndarray]]
-) -> Callable[P, _MockSampleContextManager]:
-    ...
+    func: Callable[P, Iterator[np.ndarray]],
+) -> Callable[P, _MockSampleContextManager]: ...
 
 
 @overload
@@ -115,8 +115,7 @@ def mock_sample(
     mmcore: CMMCore | None = ...,
 ) -> Callable[
     [Callable[P, Iterator[np.ndarray]]], Callable[P, _MockSampleContextManager]
-]:
-    ...
+]: ...
 
 
 def mock_sample(
@@ -166,9 +165,11 @@ def mock_sample(
 
     core = CMMCorePlus()
 
+
     @mock_sample(mmcore=core)
     def noisy_sample(shape):
         yield np.random.random(shape)
+
 
     with noisy_sample(shape=(10, 10)):
         core.snapImage()  # unnecessary, but harmless
@@ -177,7 +178,7 @@ def mock_sample(
     """
 
     def _decorator(
-        func: Callable[P, Iterator[np.ndarray]]
+        func: Callable[P, Iterator[np.ndarray]],
     ) -> Callable[P, _MockSampleContextManager]:
         @wraps(func)
         def helper(*args: Any, **kwds: Any) -> _MockSampleContextManager:
