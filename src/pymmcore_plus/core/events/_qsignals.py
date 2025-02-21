@@ -26,11 +26,13 @@ class QCoreSignaler(QObject):
     sLMExposureChanged = SLMExposureChanged  # alias
 
     # added for CMMCorePlus
-    imageSnapped = Signal(object)  # after an image is snapped
+    imageSnapped = Signal()  # on snapImage()
     mdaEngineRegistered = Signal(object, object)  # new engine, old engine
     # when continuousSequenceAcquisition is started
+    continuousSequenceAcquisitionStarting = Signal()
     continuousSequenceAcquisitionStarted = Signal()
     # when SequenceAcquisition is started
+    sequenceAcquisitionStarting = Signal(str, int, float, bool)
     sequenceAcquisitionStarted = Signal(str, int, float, bool)
     # when (Continuous)SequenceAcquisition is stopped
     sequenceAcquisitionStopped = Signal(str)
@@ -43,7 +45,7 @@ class QCoreSignaler(QObject):
     # can't use _DevicePropertyEventMixin due to metaclass conflict
     def __init__(self) -> None:
         super().__init__()
-        self._prop_callbacks: PropKeyDict = {}
+        self.property_callbacks: PropKeyDict = {}
 
     def devicePropertyChanged(
         self, device: str, property: Optional[str] = None
@@ -70,8 +72,8 @@ class QCoreSignaler(QObject):
 
         Examples
         --------
-        >>> core.events.devicePropertyChanged('Camera', 'Gain').connect(callback)
-        >>> core.events.devicePropertyChanged('Camera').connect(callback)
+        >>> core.events.devicePropertyChanged("Camera", "Gain").connect(callback)
+        >>> core.events.devicePropertyChanged("Camera").connect(callback)
         """
         # type ignored: can't use _DevicePropertyEventMixin due to metaclass conflict
         return _PropertySignal(self, device, property)

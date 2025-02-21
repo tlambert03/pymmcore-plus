@@ -6,69 +6,77 @@ build-backend = "hatchling.build"
 # https://peps.python.org/pep-0621/
 [project]
 name = "pymmcore-plus"
-description = "pymmcore superset providing improved APIs, event connection, and a pure python acquisition engine"
-keywords = ["microscope", "micro-manager", "multi-processing"]
+description = "pymmcore superset providing improved APIs, event handling, and a pure python acquisition engine"
+keywords = ["microscope", "micro-manager", "smart-microscopy"]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = { text = "BSD 3-Clause License" }
 authors = [
     { name = "Talley Lambert", email = "talley.lambert@gmail.com" },
-    { name = "Ian Hunt-Isaak" },
+    { name = "Federico Gasparoli", email = "federico.gasparoli@gmail.com" },
+    { name = "Ian Hunt-Isaak", email = "ianhuntisaak@gmail.com" },
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: System :: Hardware",
     "Topic :: System :: Hardware :: Hardware Drivers",
     "Topic :: Utilities",
-
 ]
 dynamic = ["version"]
 dependencies = [
-    "appdirs",
-    "loguru",
-    "numpy",
-    "psygnal>=0.4.2",
-    "pymmcore>=10.1.1.70.4",
-    "typer",
-    "rich",
-    "typing-extensions",
-    "useq-schema",
-    "wrapt",
+    "platformdirs >=3.0.0",
+    "numpy >=1.17.3",
+    "psygnal >=0.7",
+    "pymmcore >=10.7.0.71.0",
+    "typing-extensions",                    # not actually required at runtime
+    "useq-schema >=0.7.0",
+    "tensorstore; python_version < '3.13'",
+    # cli requirements included by default for now
+    "typer >=0.4.2",
+    "rich >=10.2.0",
 ]
 
 # extras
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
+cli = ["typer >=0.4.2", "rich >=10.2.0"]
+io = ["tifffile >=2021.6.14", "zarr >=2.2,<3"]
+PySide2 = ["PySide2 >=5.15"]
+PySide6 = ["PySide6 >=6.4.0,<6.8"]
+PyQt5 = ["PyQt5 >=5.15.4"]
+PyQt6 = ["PyQt6 >=6.4.2,<6.8"]
+test = [
+    "msgspec; python_version < '3.13'",
+    "msgpack",
+    "pytest-cov >=4",
+    "pytest-qt >=4",
+    "pytest >=7.3.2",
+    "qtpy >=2",
+    "rich",
+    "typer >=0.4.2",
+    "tifffile >=2021.6.14",
+    "zarr >=2.2,<3",
+    "xarray",
+]
+dev = ["ipython", "mypy", "pdbpp", "pre-commit", "ruff", "tensorstore-stubs"]
 docs = [
     "mkdocs >=1.4",
     "mkdocs-material",
     "mkdocstrings ==0.22.0",
     "mkdocstrings-python ==1.1.2",
+    "mkdocs-typer ==0.0.3",
     # "griffe @ git+https://github.com/tlambert03/griffe@recursion"
-]
-testing = ["PyQt6", "pytest", "pytest-cov", "pytest-qt", "qtpy"]
-dev = [
-    "black",
-    "ipython",
-    "mypy",
-    "pdbpp",
-    "pre-commit",
-    "pytest-cov",
-    "pytest",
-    "rich",
-    "ruff",
-    "types-psutil",
 ]
 
 [project.urls]
@@ -86,66 +94,75 @@ source = "vcs"
 [tool.hatch.metadata]
 allow-direct-references = true
 
-[tool.hatch.build.hooks.vcs]
-version-file = "src/pymmcore_plus/_version.py"
-
 # https://hatch.pypa.io/latest/config/build/#file-selection
-# [tool.hatch.build.targets.sdist]
-# include = ["/src", "/tests"]
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests"]
 
+[tool.hatch.build.targets.wheel]
+only-include = ["src"]
+sources = ["src"]
 
-# https://github.com/charliermarsh/ruff
+# https://docs.astral.sh/ruff/rules/
 [tool.ruff]
 line-length = 88
-target-version = "py38"
-extend-select = [
+target-version = "py39"
+
+[tool.ruff.lint]
+pydocstyle = { convention = "numpy" }
+select = [
     "E",    # style errors
     "F",    # flakes
+    "W",    # warnings
     "D",    # pydocstyle
     "I",    # isort
     "UP",   # pyupgrade
-    # "N",  # pep8-naming
-    # "S",  # bandit
-    "C",    # flake8-comprehensions
+    "C4",   # flake8-comprehensions
     "B",    # flake8-bugbear
     "A001", # flake8-builtins
     "RUF",  # ruff-specific rules
+    "TID",  # tidy
+    "TC",   # typecheck
+    "SLF",  # private-access
 ]
-extend-ignore = [
+ignore = [
     "D100", # Missing docstring in public module
     "D104", # Missing docstring in public package
-    "D107", # Missing docstring in __init__
-    "D203", # 1 blank line required before class docstring
-    "D212", # Multi-line docstring summary should start at the first line
-    "D213", # Multi-line docstring summary should start at the second line
-    "D400", # First line should end with a period
-    "D401", # First line should be in imperative mood
-    "D413", # Missing blank line after last section
-    "D416", # Section name should end with a colon
-    "C901", # Function is too complex
+    "D401", # First line should be in imperative mood (remove to opt in)
 ]
 
-[tool.ruff.per-file-ignores]
-"tests/*.py" = ["D"]
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["D", "SLF"]
 "examples/*.py" = ["D"]
 "_cli.py" = ["B008"]
-"_mmcore_plus*.py" = ["D4"]
 "docs/*.py" = ["A", "D"]
+
+# https://docs.astral.sh/ruff/formatter/
+[tool.ruff.format]
+docstring-code-format = true
 
 # https://docs.pytest.org/en/6.2.x/customize.html
 [tool.pytest.ini_options]
 minversion = "6.0"
 testpaths = ["tests"]
-filterwarnings = ["error"]
+filterwarnings = ["error", "ignore:Failed to disconnect::pytestqt"]
+markers = ["run_last: mark a test to run last"]
 
 # https://mypy.readthedocs.io/en/stable/config_file.html
 [tool.mypy]
-files = "src/**/*/*.py"
+files = "src/**"
 strict = true
 disallow_any_generics = false
 disallow_subclassing_any = false
 show_error_codes = true
 pretty = true
+plugins = "pydantic.mypy"
+# see https://github.com/python/mypy/issues/5374 and related discussions
+# it causes more pain than it solves
+disable_error_code = ["type-abstract"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
 
 # https://coverage.readthedocs.io/en/6.4/config.html
 [tool.coverage.report]
@@ -155,11 +172,15 @@ exclude_lines = [
     "@overload",
     "except ImportError",
     "raise AssertionError",
+    "\\.\\.\\.",
     "if __name__ == .__main__.:",
     "raise NotImplementedError",
 ]
+show_missing = true
+
 [tool.coverage.run]
-source = ['src/pymmcore_plus']
+source = ['pymmcore_plus']
+omit = ["src/pymmcore_plus/_build.py"]
 
 # https://github.com/mgedmin/check-manifest#configuration
 [tool.check-manifest]
@@ -170,3 +191,6 @@ ignore = [
     "tests/**/*",
     "tox.ini",
 ]
+
+[tool.typos.default]
+extend-ignore-identifiers-re = ["(?i)nd2?.*", "(?i)ome", "anager"]

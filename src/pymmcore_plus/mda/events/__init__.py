@@ -2,38 +2,38 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..._util import _qt_app_is_running
+from pymmcore_plus._util import signals_backend
+
 from ._protocol import PMDASignaler
 from ._psygnal import MDASignaler
 
 if TYPE_CHECKING:
-    from ._qsignals import QMDASignaler
+    from ._qsignals import QMDASignaler  # noqa: TC004
 
 
 __all__ = [
-    "PMDASignaler",
     "MDASignaler",
+    "PMDASignaler",
     "QMDASignaler",
     "_get_auto_MDA_callback_class",
 ]
 
 
-def _get_auto_MDA_callback_class(
-    default: type[PMDASignaler] = MDASignaler,  # type: ignore
-) -> type[PMDASignaler]:
-    if _qt_app_is_running():
+def _get_auto_MDA_callback_class() -> type[PMDASignaler]:
+    if signals_backend() == "qt":
         from ._qsignals import QMDASignaler
 
         return QMDASignaler
 
-    return default
+    # (not sure why this type ignore is needed... apparently isn't matching protocol)
+    return MDASignaler  # type: ignore
 
 
-def __dir__() -> list[str]:
+def __dir__() -> list[str]:  # pragma: no cover
     return [*list(globals()), "QMDASignaler"]
 
 
-def __getattr__(name: str) -> object:
+def __getattr__(name: str) -> object:  # pragma: no cover
     if name == "QMDASignaler":
         try:
             from ._qsignals import QMDASignaler

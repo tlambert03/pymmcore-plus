@@ -10,13 +10,16 @@ class PSignalInstance(Protocol):
     """
 
     def connect(self, slot: Callable) -> Any:
-        ...
+        """Connect slot to this signal."""
 
-    def disconnect(self, slot: Callable) -> Any:
-        ...
+    def disconnect(self, slot: Optional[Callable] = None) -> Any:
+        """Disconnect slot from this signal.
+
+        If `None`, all slots should be disconnected.
+        """
 
     def emit(self, *args: Any) -> Any:
-        ...
+        """Emits the signal with the given arguments."""
 
 
 @runtime_checkable
@@ -24,7 +27,7 @@ class PSignalDescriptor(Protocol):
     """Descriptor that returns a signal instance."""
 
     def __get__(self, instance: Optional[Any], owner: Any) -> PSignalInstance:
-        ...
+        """Returns the signal instance for this descriptor."""
 
 
 PSignal = Union[PSignalDescriptor, PSignalInstance]
@@ -69,18 +72,19 @@ class PCoreSignaler(Protocol):
 
     core = CMMCorePlus()
 
+
     def on_exposure_changed(device: str, new_exposure: float):
         print(f"Exposure changed for {device} to {new_exposure}")
 
-    core.exposureChanged.connect(my_callback)
+
+    core.events.exposureChanged.connect(my_callback)
     ```
 
     Events may also be connected as a decorator:
 
     ```python
-    @core.exposureChanged.connect
-    def on_exposure_changed(device: str, new_exposure: float):
-        ...
+    @core.events.exposureChanged.connect
+    def on_exposure_changed(device: str, new_exposure: float): ...
     ```
 
     ------
@@ -119,7 +123,7 @@ class PCoreSignaler(Protocol):
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """
     imageSnapped: PSignal
-    """Emits `(np.ndarray)` whenever snap is called.
+    """Emits with no arguments whenever snap is called.
 
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """
@@ -129,14 +133,26 @@ class PCoreSignaler(Protocol):
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """
 
-    continuousSequenceAcquisitionStarted: PSignal
-    """Emits with no arguments when continuous sequence acquisition is started.
+    continuousSequenceAcquisitionStarting: PSignal
+    """Emits with no arguments *before* continuous sequence acquisition is started.
 
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """
-    sequenceAcquisitionStarted: PSignal
-    """Emits `(str, int, float, bool)` when sequence acquisition is started.
+    continuousSequenceAcquisitionStarted: PSignal
+    """Emits with no arguments *after* continuous sequence acquisition has started.
 
+    > :sparkles: This signal is unique to `pymmcore-plus`.
+    """
+    sequenceAcquisitionStarting: PSignal
+    """Emits `(str, int, float, bool)` *before* sequence acquisition is started.
+
+    (cameraLabel, numImages, intervalMs, stopOnOverflow)
+    > :sparkles: This signal is unique to `pymmcore-plus`.
+    """
+    sequenceAcquisitionStarted: PSignal
+    """Emits `(str, int, float, bool)` *after* sequence acquisition has started.
+
+    (cameraLabel, numImages, intervalMs, stopOnOverflow)
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """
     sequenceAcquisitionStopped: PSignal
@@ -194,6 +210,6 @@ class PCoreSignaler(Protocol):
 
         Examples
         --------
-        >>> core.events.devicePropertyChanged('Camera', 'Gain').connect(callback)
-        >>> core.events.devicePropertyChanged('Camera').connect(callback)
+        >>> core.events.devicePropertyChanged("Camera", "Gain").connect(callback)
+        >>> core.events.devicePropertyChanged("Camera").connect(callback)
         """

@@ -1,41 +1,59 @@
 from __future__ import annotations
 
+import datetime
 import importlib
 import os
+import platform
+import re
 import sys
+import warnings
+from collections import defaultdict
+from contextlib import contextmanager, suppress
 from functools import wraps
+from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 from time import sleep
-from typing import TYPE_CHECKING, Literal, overload
+from typing import TYPE_CHECKING, cast, overload
 
-import appdirs
-
-from ._logger import logger
+from platformdirs import user_data_dir
 
 if TYPE_CHECKING:
-    from typing import TYPE_CHECKING, Any, Callable, TypeVar
+    from collections.abc import Iterator
+    from re import Pattern
+    from typing import Any, Callable, Literal, TypeVar
 
-    from typing_extensions import ParamSpec
+    QtConnectionType = Literal["AutoConnection", "DirectConnection", "QueuedConnection"]
+
+    from typing_extensions import ParamSpec, TypeGuard  # py310
+
+    from .core.events._protocol import PSignalInstance
 
     P = ParamSpec("P")
     R = TypeVar("R")
 
+try:
+    # if we have wurlitzer, use it to suppress MMCorePlus output
+    # during device discovery
+    from wurlitzer import pipes as no_stdout
+except ImportError:
+    from contextlib import nullcontext as no_stdout
 
-__all__ = ["find_micromanager", "_qt_app_is_running", "retry"]
 
-USER_DATA_DIR = Path(appdirs.user_data_dir(appname="pymmcore-plus"))
+__all__ = ["find_micromanager", "no_stdout", "retry", "signals_backend"]
+
+APP_NAME = "pymmcore-plus"
+USER_DATA_DIR = Path(user_data_dir(appname=APP_NAME))
 USER_DATA_MM_PATH = USER_DATA_DIR / "mm"
+CURRENT_MM_PATH = USER_DATA_MM_PATH / ".current_mm"
 PYMMCORE_PLUS_PATH = Path(__file__).parent.parent
 
 
 @overload
-def find_micromanager(return_first: Literal[True] = True) -> str | None:
-    ...
+def find_micromanager(return_first: Literal[True] = True) -> str | None: ...
 
 
 @overload
-def find_micromanager(return_first: Literal[False]) -> list[str]:
-    ...
+def find_micromanager(return_first: Literal[False]) -> list[str]: ...
 
 
 def find_micromanager(return_first: bool = True) -> str | None | list[str]:
@@ -44,16 +62,17 @@ def find_micromanager(return_first: bool = True) -> str | None | list[str]:
     In order, this will look for:
 
     1. An environment variable named `MICROMANAGER_PATH`
-    2. A `Micro-Manager*` folder in the `pymmcore-plus` user data directory
+    2. A path stored in the `CURRENT_MM_PATH` file (set by `use_micromanager`).
+    3. A `Micro-Manager*` folder in the `pymmcore-plus` user data directory
        (this is the default install location when running `mmcore install`)
 
         - **Windows**: C:\Users\\[user]\AppData\Local\pymmcore-plus\pymmcore-plus
         - **macOS**: ~/Library/Application Support/pymmcore-plus
         - **Linux**: ~/.local/share/pymmcore-plus
 
-    3. A `Micro-Manager*` folder in the `pymmcore_plus` package directory (this is the
+    4. A `Micro-Manager*` folder in the `pymmcore_plus` package directory (this is the
        default install location when running `python -m pymmcore_plus.install`)
-    4. The default micro-manager install location:
+    5. The default micro-manager install location:
 
         - **Windows**: `C:/Program Files/`
         - **macOS**: `/Applications`
@@ -73,31 +92,49 @@ def find_micromanager(return_first: bool = True) -> str | None | list[str]:
         If True (default), return the first found path.  If False, return a list of
         all found paths.
     """
+    from ._logger import logger
+
+    # we use a dict here to avoid duplicates
+    full_list: dict[str, None] = {}
+
     # environment variable takes precedence
-    full_list: list[str] = []
     env_path = os.getenv("MICROMANAGER_PATH")
     if env_path and os.path.isdir(env_path):
         if return_first:
-            logger.debug(f"using MM path from env var: {env_path}")
+            logger.debug("using MM path from env var: %s", env_path)
             return env_path
-        full_list.append(env_path)
+        full_list[env_path] = None
 
-    # then look in appdirs.user_data_dir
-    user_install = sorted(USER_DATA_MM_PATH.glob("Micro-Manager*"), reverse=True)
+    # then check for a path in CURRENT_MM_PATH
+    if CURRENT_MM_PATH.exists():
+        path = CURRENT_MM_PATH.read_text().strip()
+        if os.path.isdir(path):
+            if return_first:
+                logger.debug("using MM path from current_mm: %s", path)
+                return path
+            full_list[path] = None
+
+    # then look in user_data_dir
+    _folders = (p for p in USER_DATA_MM_PATH.glob("Micro-Manager*") if p.is_dir())
+    user_install = sorted(_folders, reverse=True)
     if user_install:
         if return_first:
-            logger.debug(f"using MM path from user install: {user_install[0]}")
+            logger.debug("using MM path from user install: %s", user_install[0])
             return str(user_install[0])
-        full_list.extend([str(x) for x in user_install])
+        for x in user_install:
+            full_list[str(x)] = None
 
     # then look for an installation in this folder (from `pymmcore_plus.install`)
     sfx = "_win" if os.name == "nt" else "_mac"
-    local_install = list(PYMMCORE_PLUS_PATH.glob(f"**/Micro-Manager*{sfx}"))
+    local_install = [
+        p for p in PYMMCORE_PLUS_PATH.glob(f"**/Micro-Manager*{sfx}") if p.is_dir()
+    ]
     if local_install:
         if return_first:
-            logger.debug(f"using MM path from local install: {local_install[0]}")
+            logger.debug("using MM path from local install: %s", local_install[0])
             return str(local_install[0])
-        full_list.extend([str(x) for x in local_install])
+        for x in local_install:
+            full_list[str(x)] = None
 
     applications = {
         "darwin": Path("/Applications/"),
@@ -112,21 +149,112 @@ def find_micromanager(return_first: bool = True) -> str | None | list[str]:
     pth = next(app_path.glob("[m,M]icro-[m,M]anager*"), None)
     if return_first:
         if pth is None:
-            logger.error(f"could not find micromanager directory in {app_path}")
+            logger.error(
+                "could not find micromanager directory. Please run 'mmcore install'"
+            )
             return None
-        logger.debug(f"using MM path found in applications: {pth}")
+        logger.debug("using MM path found in applications: %s", pth)
         return str(pth)
     if pth is not None:
-        full_list.append(str(pth))
-    return full_list
+        full_list[str(pth)] = None
+    return list(full_list)
+
+
+def _match_mm_pattern(pattern: str | Pattern[str]) -> Path | None:
+    """Locate an existing Micro-Manager folder using a regex pattern."""
+    for _path in find_micromanager(return_first=False):
+        if not isinstance(pattern, re.Pattern):
+            pattern = str(pattern)
+        if re.search(pattern, _path) is not None:
+            return Path(_path)
+    return None
+
+
+def use_micromanager(
+    path: str | Path | None = None, pattern: str | Pattern[str] | None = None
+) -> Path | None:
+    """Set the preferred Micro-Manager path.
+
+    This sets the preferred micromanager path, and persists across sessions.
+    This path takes precedence over everything *except* the `MICROMANAGER_PATH`
+    environment variable.
+
+    Parameters
+    ----------
+    path : str | Path | None
+        Path to an existing directory. This directory should contain micro-manager
+        device adapters. If `None`, the path will be determined using `pattern`.
+    pattern : str Pattern | | None
+        A regex pattern to match against the micromanager paths found by
+        `find_micromanager`. If no match is found, a `FileNotFoundError` will be raised.
+    """
+    if path is None:
+        if pattern is None:  # pragma: no cover
+            raise ValueError("One of 'path' or 'pattern' must be provided")
+        if (path := _match_mm_pattern(pattern)) is None:
+            options = "\n".join(find_micromanager(return_first=False))
+            raise FileNotFoundError(
+                f"No micromanager path found matching: {pattern!r}. Options:\n{options}"
+            )
+
+    if not isinstance(path, Path):  # pragma: no cover
+        path = Path(path)
+
+    path = path.expanduser().resolve()
+    if not path.is_dir():  # pragma: no cover
+        if not path.exists():
+            raise FileNotFoundError(f"Path not found: {path!r}")
+        raise NotADirectoryError(f"Not a directory: {path!r}")
+
+    USER_DATA_MM_PATH.mkdir(parents=True, exist_ok=True)
+    CURRENT_MM_PATH.write_text(str(path))
+    return path
+
+
+def _imported_qt_modules() -> Iterator[str]:
+    for modname in {"PyQt5", "PySide2", "PyQt6", "PySide6"}:
+        if modname in sys.modules:
+            yield modname
 
 
 def _qt_app_is_running() -> bool:
-    for modname in {"PyQt5", "PySide2", "PyQt6", "PySide6"}:
-        if modname in sys.modules:
+    for modname in _imported_qt_modules():
+        try:
+            # in broken environments modname can be a namespace package...
+            # and QtWidgets will still be unavailable
             QtWidgets = importlib.import_module(".QtWidgets", modname)
-            return QtWidgets.QApplication.instance() is not None
-    return False
+        except ImportError:  # pragma: no cover
+            continue
+        return QtWidgets.QApplication.instance() is not None
+    return False  # pragma: no cover
+
+
+MMCORE_PLUS_SIGNALS_BACKEND = "MMCORE_PLUS_SIGNALS_BACKEND"
+
+
+def signals_backend() -> Literal["qt", "psygnal"]:
+    """Return the name of the event backend to use."""
+    env_var = os.environ.get(MMCORE_PLUS_SIGNALS_BACKEND, "auto").lower()
+    if env_var not in {"qt", "psygnal", "auto"}:
+        warnings.warn(
+            f"{MMCORE_PLUS_SIGNALS_BACKEND} must be one of ['qt', 'psygnal', 'auto']. "
+            f"not: {env_var!r}. Using 'auto'.",
+            stacklevel=1,
+        )
+        env_var = "auto"
+
+    qt_app_running = _qt_app_is_running()
+    if env_var == "auto":
+        return "qt" if qt_app_running else "psygnal"
+    if env_var == "qt":
+        if qt_app_running or list(_imported_qt_modules()):
+            return "qt"
+        warnings.warn(
+            f"{MMCORE_PLUS_SIGNALS_BACKEND} set to 'qt', but no Qt app is running. "
+            "Falling back to 'psygnal'.",
+            stacklevel=1,
+        )
+    return "psygnal"
 
 
 @overload
@@ -136,8 +264,7 @@ def retry(
     exceptions: type[BaseException] | tuple[type[BaseException], ...] = ...,
     delay: float | None = ...,
     logger: Callable[[str], Any] | None = ...,
-) -> Callable[[Callable[P, R]], Callable[P, R]]:
-    ...
+) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
 
 
 @overload
@@ -147,8 +274,7 @@ def retry(
     exceptions: type[BaseException] | tuple[type[BaseException], ...] = ...,
     delay: float | None = ...,
     logger: Callable[[str], Any] | None = ...,
-) -> Callable[P, R]:
-    ...
+) -> Callable[P, R]: ...
 
 
 def retry(
@@ -190,11 +316,14 @@ def retry(
     mmc = CMMCorePlus()
     mmc.loadSystemConfiguration()
 
+
     @retry(exceptions=RuntimeError, delay=0.5, logger=print)
     def snap_image():
         return mmc.snap()
 
+
     snap_image()
+    ```
     """
 
     def deco(_func: Callable[P, R]) -> Callable[P, R]:
@@ -233,7 +362,9 @@ def print_tabular_data(data: dict[str, list[str]], sort: str | None = None) -> N
         _rich_print_table(data, sort=sort)
         return
     except ImportError:
-        logger.info("`pip install rich` for a nicer table display")
+        from ._logger import logger
+
+        logger.warning("`pip install rich` for a nicer table display")
 
     col_widths = [len(x) for x in data]
     for i, col in enumerate(data.values()):
@@ -243,8 +374,8 @@ def print_tabular_data(data: dict[str, list[str]], sort: str | None = None) -> N
 
     print(fmt.format(*data.keys()))
 
-    dashs = ["-" * w for w in col_widths]
-    print(fmt.format(*dashs))
+    dashes = ["-" * w for w in col_widths]
+    print(fmt.format(*dashes))
 
     for row in _sorted_rows(data, sort=sort):
         print(fmt.format(*(str(x) for x in row)))
@@ -287,11 +418,203 @@ def _sorted_rows(data: dict, sort: str | None) -> list[tuple]:
     """Return a list of rows, sorted by the given column name."""
     rows = list(zip(*data.values()))
     if sort is not None:
-        try:
+        with suppress(ValueError):
+            # silently ignore if the sort column is not found
             sort_idx = [x.lower() for x in data].index(sort.lower())
-        except ValueError:
-            raise ValueError(
-                f"invalid sort column: {sort!r}. Must be one of {list(data)}"
-            ) from None
-        rows.sort(key=lambda x: x[sort_idx])
+            rows.sort(key=lambda x: x[sort_idx])
     return rows
+
+
+@contextmanager
+def listeners_connected(
+    emitter: Any,
+    *listeners: Any,
+    name_map: dict[str, str] | None = None,
+    qt_connection_type: QtConnectionType | None = None,
+) -> Iterator[None]:
+    """Context manager for listening to signals.
+
+    This provides a way for one or more `listener` to temporarily connect to signals on
+    an `emitter`. Any method names on `listener` that match signal names on `emitter`
+    will be connected, then disconnected when the context exits (see example below).
+    Names can be mapped explicitly using `name_map` if the signal names do not match
+    exactly.
+
+    Parameters
+    ----------
+    emitter : Any
+        An object that has signals (e.g. `psygnal.SignalInstance` or
+        `QtCore.SignalInstance`).  Basically, anything with `connect` and `disconnect`
+        methods.
+    listeners : Any
+        Object(s) that has methods matching the name of signals on `emitter`.
+    name_map : dict[str, str] | None
+        Optionally map signal names on `emitter` to different method names on
+        `listener`.  This can be used to connect callbacks with different names. By
+        default, callbacks names must match the signal names exactly.
+    qt_connection_type: str | None
+        ADVANCED: Optionally specify the Qt connection type to use when connecting
+        signals, in the case where `emitter` is a Qt object.  This is useful for
+        connecting to Qt signals in a thread-safe way. Must be one of
+        `"AutoConnection"`, `"DirectConnection"`, `"QueuedConnection"`.
+        If `None` (the default), `Qt.ConnectionType.AutoConnection` will be used.
+
+    Examples
+    --------
+    ```python
+    from qtpy.QtCore import Signal
+
+    # OR
+    from psygnal import Signal
+
+
+    class Emitter:
+        signalName = Signal(int)
+
+
+    class Listener:
+        def signalName(self, value: int):
+            print(value)
+
+
+    emitter = Emitter()
+    listener = Listener()
+
+    with listeners_connected(emitter, listener):
+        emitter.signalName.emit(42)  # prints 42
+    ```
+    """
+    # mapping of signal name on emitter to a set of tokens to disconnect later.
+    tokens: defaultdict[str, set[Any]] = defaultdict(set)
+    name_map = name_map or {}
+
+    for listener in listeners:
+        if isinstance(listener, dict):  # pragma: no cover
+            import warnings
+
+            warnings.warn(
+                "Received a dict as a listener. Did you mean to use `name_map`?",
+                stacklevel=2,
+            )
+            continue
+
+        # get a list of common names:
+        listener_names = set(dir(listener)).union(name_map)
+        common_names: set[str] = set(dir(emitter)).intersection(listener_names)
+
+        for attr_name in common_names:
+            if attr_name.startswith("__"):
+                continue
+            if _is_signal_instance(signal := getattr(emitter, attr_name)):
+                slot_name = name_map.get(attr_name, attr_name)
+                if callable(slot := getattr(listener, slot_name)):
+                    if qt_connection_type and _is_qt_signal(signal):
+                        from qtpy.QtCore import Qt
+
+                        ctype = getattr(Qt.ConnectionType, qt_connection_type)
+                        token = signal.connect(slot, ctype)  # type: ignore
+                    else:
+                        token = signal.connect(slot)
+
+                    # This only seems to happen on PySide2
+                    if token is None or isinstance(token, bool):
+                        token = slot
+                    tokens[attr_name].add(token)
+
+    try:
+        yield
+    finally:
+        for attr_name, token_set in tokens.items():
+            for token in token_set:
+                sig = cast("PSignalInstance", getattr(emitter, attr_name))
+                sig.disconnect(token)
+
+
+def _is_signal_instance(obj: Any) -> TypeGuard[PSignalInstance]:
+    # minimal protocol shared by psygnal and Qt that we need here.
+    return (
+        hasattr(obj, "connect") and callable(obj.connect) and hasattr(obj, "disconnect")
+    )
+
+
+def _is_qt_signal(obj: Any) -> TypeGuard[PSignalInstance]:
+    modname = getattr(type(obj), "__module__", "")
+    return "Qt" in modname or "Shiboken" in modname
+
+
+def system_info() -> dict[str, str]:
+    """Return a dictionary of system information.
+
+    This backs the `mmcore info` command in the CLI.
+    """
+    import pymmcore_plus
+
+    info = {
+        "python": sys.version,
+        "platform": platform.platform(),
+        "pymmcore-plus": getattr(pymmcore_plus, "__version__", "err"),
+    }
+    try:
+        import pymmcore
+
+        info["pymmcore"] = getattr(pymmcore, "__version__", "err")
+    except ImportError:
+        info["pymmcore"] = ""
+    try:
+        import pymmcore_nano
+
+        info["pymmcore-nano"] = getattr(pymmcore_nano, "__version__", "err")
+    except ImportError:
+        info["pymmcore-nano"] = ""
+
+    with suppress(Exception):
+        core = pymmcore_plus.CMMCorePlus.instance()
+        info["core-version-info"] = core.getVersionInfo()
+        info["api-version-info"] = core.getAPIVersionInfo()
+
+    if (mm_path := find_micromanager()) is not None:
+        path = str(Path(mm_path).resolve())
+        path = path.replace(os.path.expanduser("~"), "~")  # privacy
+        info["adapter-path"] = path
+    else:
+        info["adapter-path"] = "not found"
+
+    for pkg in (
+        "useq-schema",
+        "pymmcore-widgets",
+        "napari-micromanager",
+        "napari",
+        "tifffile",
+        "zarr",
+    ):
+        with suppress(ImportError, PackageNotFoundError):
+            info[pkg] = importlib.metadata.version(pkg)
+
+            if pkg == "pymmcore-widgets":
+                with suppress(ImportError):
+                    from qtpy import API_NAME, QT_VERSION
+
+                    info["qt"] = f"{API_NAME} {QT_VERSION}"
+
+    return info
+
+
+if sys.version_info < (3, 11):
+
+    def _utcnow() -> datetime.datetime:
+        return datetime.datetime.utcnow()
+else:
+
+    def _utcnow() -> datetime.datetime:
+        return datetime.datetime.now(datetime.UTC)
+
+
+def timestamp() -> str:
+    """Return the current timestamp, try using local timezone, in ISO format.
+
+    YYYY-MM-DD HH:MM:SS.mmmmmm+HH:MM
+    """
+    now = _utcnow()
+    with suppress(Exception):
+        now = now.astimezone()
+    return now.isoformat()

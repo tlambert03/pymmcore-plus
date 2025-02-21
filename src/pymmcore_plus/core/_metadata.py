@@ -1,9 +1,10 @@
 """pythonic wrapper on pymmcore.Metadata object."""
-from collections.abc import Mapping
-from types import new_class
-from typing import Any, ItemsView, Iterator, KeysView, ValuesView, cast
 
-import pymmcore
+from collections.abc import ItemsView, Iterator, KeysView, Mapping, ValuesView
+from types import new_class
+from typing import Any, cast
+
+import pymmcore_plus._pymmcore as pymmcore
 
 _NULL = object()
 
@@ -19,8 +20,7 @@ class Metadata(pymmcore.Metadata):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__()
         if args and isinstance(args[0], Mapping):
-            for k, v in args[0].items():
-                self[k] = v
+            kwargs = {**args[0], **kwargs}
         for k, v in kwargs.items():
             self[k] = v
 
@@ -66,7 +66,7 @@ class Metadata(pymmcore.Metadata):
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Metadata):
-            return False
+            return False  # pragma: no cover
         return dict(self) == dict(other)
 
     def json(self) -> str:
@@ -87,3 +87,7 @@ class Metadata(pymmcore.Metadata):
 metadata_keys = new_class("metadata_keys", (KeysView,), {})
 metadata_items = new_class("metadata_items", (ItemsView,), {})
 metadata_values = new_class("metadata_values", (ValuesView,), {})
+
+# Register the new classes with the `collections.abc` module
+# so that isistance() works as expected.
+Mapping.register(Metadata)

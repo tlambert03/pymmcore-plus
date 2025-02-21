@@ -1,23 +1,33 @@
+"""pymmcore superset providing improved APIs, event handling, and a pure python acquisition engine."""  # noqa: E501
+
+from importlib.metadata import PackageNotFoundError, version
+
 try:
-    from ._version import version as __version__
-except ImportError:
+    __version__ = version("pymmcore-plus")
+except PackageNotFoundError:  # pragma: no cover
     __version__ = "unknown"
 
 
+from ._logger import configure_logging
 from ._mock_sample import mock_sample
-from ._util import find_micromanager
+from ._util import find_micromanager, use_micromanager
 from .core import (
+    CFGCommand,
+    CFGGroup,
     CMMCorePlus,
     ConfigGroup,
     Configuration,
     Device,
     DeviceAdapter,
     DeviceDetectionStatus,
+    DeviceInitializationState,
     DeviceNotification,
     DeviceProperty,
     DeviceType,
     FocusDirection,
+    Keyword,
     Metadata,
+    PixelFormat,
     PortType,
     PropertyType,
 )
@@ -25,8 +35,9 @@ from .core.events import CMMCoreSignaler, PCoreSignaler
 from .mda._runner import GeneratorMDASequence
 
 __all__ = [
-    "__version__",
     "ActionType",
+    "CFGCommand",
+    "CFGGroup",
     "CMMCorePlus",
     "CMMCoreSignaler",
     "ConfigGroup",
@@ -34,15 +45,21 @@ __all__ = [
     "Device",
     "DeviceAdapter",
     "DeviceDetectionStatus",
+    "DeviceInitializationState",
     "DeviceNotification",
     "DeviceProperty",
     "DeviceType",
-    "find_micromanager",
     "FocusDirection",
     "GeneratorMDASequence",
+    "Keyword",
     "Metadata",
-    "mock_sample",
     "PCoreSignaler",
+    "PixelFormat",
     "PortType",
     "PropertyType",
+    "__version__",
+    "configure_logging",
+    "find_micromanager",
+    "mock_sample",
+    "use_micromanager",
 ]

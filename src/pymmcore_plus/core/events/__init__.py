@@ -1,37 +1,36 @@
-from typing import TYPE_CHECKING, Any, List, Type
+from typing import TYPE_CHECKING, Any
 
-from ..._util import _qt_app_is_running
+from pymmcore_plus._util import signals_backend
+
 from ._protocol import PCoreSignaler
 from ._psygnal import CMMCoreSignaler
 
 if TYPE_CHECKING:
-    from ._qsignals import QCoreSignaler
+    from ._qsignals import QCoreSignaler  # noqa: TC004
+
 
 __all__ = [
     "CMMCoreSignaler",
-    "QCoreSignaler",
     "PCoreSignaler",
-    "_get_auto_core_callback_class",
+    "QCoreSignaler",
     "_denormalize_slot",
+    "_get_auto_core_callback_class",
 ]
 
 
-def _get_auto_core_callback_class(
-    default: Type[PCoreSignaler] = CMMCoreSignaler,
-) -> Type[PCoreSignaler]:
-    if _qt_app_is_running():
+def _get_auto_core_callback_class() -> type[PCoreSignaler]:
+    if signals_backend() == "qt":
         from ._qsignals import QCoreSignaler
 
         return QCoreSignaler
+    return CMMCoreSignaler
 
-    return default
 
-
-def __dir__() -> List[str]:
+def __dir__() -> list[str]:  # pragma: no cover
     return [*list(globals()), "QCoreSignaler"]
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str) -> Any:  # pragma: no cover
     if name == "QCoreSignaler":
         try:
             from ._qsignals import QCoreSignaler
@@ -39,7 +38,7 @@ def __getattr__(name: str) -> Any:
             return QCoreSignaler
         except ImportError as e:
             raise ImportError(
-                f"{e}.\nQCoreSignaler requires qtpy and either PySide2 or PyQt5.`"
+                f"{e}.\nQCoreSignaler requires qtpy and a Qt binding."
             ) from e
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

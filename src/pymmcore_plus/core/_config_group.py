@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Iterator, Literal, MutableMapping, overload
+from collections.abc import Iterator, MutableMapping
+from typing import TYPE_CHECKING, Any, Literal, overload
 
-import pymmcore
+import pymmcore_plus._pymmcore as pymmcore
 
 from ._config import Configuration
 from ._property import DeviceProperty
 
 if TYPE_CHECKING:
-    from ..core._mmcore_plus import CMMCorePlus
+    from pymmcore_plus.core._mmcore_plus import CMMCorePlus
 
 
 class ConfigGroup(MutableMapping[str, Configuration]):
@@ -72,7 +73,7 @@ class ConfigGroup(MutableMapping[str, Configuration]):
     def __getitem__(self, configName: str) -> Configuration:
         try:
             return self._mmc.getConfigData(self._name, configName)
-        except ValueError as e:
+        except (ValueError, RuntimeError) as e:
             if configName not in self:
                 raise KeyError(
                     f"Group {self._name!r} does not have a config {configName!r}"
@@ -173,12 +174,10 @@ class ConfigGroup(MutableMapping[str, Configuration]):
         self._mmc.setConfig(self._name, configName)
 
     @overload
-    def getCurrentConfig(self, as_object: Literal[True]) -> Configuration:
-        ...
+    def getCurrentConfig(self, as_object: Literal[True]) -> Configuration: ...
 
     @overload
-    def getCurrentConfig(self, as_object: Literal[False] = False) -> str:
-        ...
+    def getCurrentConfig(self, as_object: Literal[False] = False) -> str: ...
 
     def getCurrentConfig(self, as_object: bool = False) -> str | Configuration:
         """Returns the current configuration for a given group."""
@@ -186,12 +185,10 @@ class ConfigGroup(MutableMapping[str, Configuration]):
         return self[current] if as_object else current
 
     @overload
-    def getCurrentConfigFromCache(self, as_object: Literal[True]) -> Configuration:
-        ...
+    def getCurrentConfigFromCache(self, as_object: Literal[True]) -> Configuration: ...
 
     @overload
-    def getCurrentConfigFromCache(self, as_object: Literal[False] = False) -> str:
-        ...
+    def getCurrentConfigFromCache(self, as_object: Literal[False] = False) -> str: ...
 
     def getCurrentConfigFromCache(self, as_object: bool = False) -> str | Configuration:
         """Returns the current configuration for a given group from the cache."""

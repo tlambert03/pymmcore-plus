@@ -1,4 +1,5 @@
 """Module vendored from psygnal. Only for internal use."""
+
 from __future__ import annotations
 
 import weakref
@@ -7,13 +8,11 @@ from types import MethodType
 from typing import TYPE_CHECKING, Any, Callable, Union
 
 if TYPE_CHECKING:
-    from typing import Tuple
+    from typing_extensions import TypeGuard  # py310
 
-    from typing_extensions import TypeGuard
-
-    MethodRef = Tuple[weakref.ReferenceType[object], str, Callable | None]
+    MethodRef = tuple[weakref.ReferenceType[object], str, Callable | None]
     NormedCallback = Union[MethodRef, Callable]
-    StoredSlot = Tuple[NormedCallback, int | None]
+    StoredSlot = tuple[NormedCallback, int | None]
     ReducerFunc = Callable[[tuple, tuple], tuple]
 
 
@@ -74,6 +73,6 @@ def denormalize_slot(slot: NormedCallback) -> Callable | None:
     if obj is None:
         return None
     if method is not None:
-        return method
+        return method  # pragma: no cover
     _cb = getattr(obj, name, None)
     return None if _cb is None else _cb

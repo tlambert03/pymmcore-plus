@@ -1,14 +1,19 @@
 """pythonic wrapper on pymmcore.Configuration object."""
+
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Iterable, Iterator, Tuple, overload
+from typing import TYPE_CHECKING, Any, overload
 
-import pymmcore
-from typing_extensions import TypeAlias
+import pymmcore_plus._pymmcore as pymmcore
 
-DevPropValueTuple: TypeAlias = Tuple[str, str, str]
-DevPropTuple: TypeAlias = Tuple[str, str]
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+
+    from typing_extensions import TypeAlias  # py310
+
+DevPropValueTuple: TypeAlias = tuple[str, str, str]
+DevPropTuple: TypeAlias = tuple[str, str]
 
 
 class Configuration(pymmcore.Configuration):
@@ -65,12 +70,10 @@ class Configuration(pymmcore.Configuration):
         return self.size()
 
     @overload
-    def __getitem__(self, key: int) -> pymmcore.PropertySetting:
-        ...
+    def __getitem__(self, key: int) -> pymmcore.PropertySetting: ...
 
     @overload
-    def __getitem__(self, key: DevPropTuple) -> str:
-        ...
+    def __getitem__(self, key: DevPropTuple) -> str: ...
 
     def __getitem__(self, key: int | DevPropTuple) -> str | pymmcore.PropertySetting:
         """Get property setting by index or (devLabel, propLabel) key.
@@ -97,7 +100,7 @@ class Configuration(pymmcore.Configuration):
         """Delete setting for `(devLabel, propLabel)` from the configuration."""
         if not isinstance(key, tuple) or len(key) != 2:
             raise TypeError("key must be a 2-tuple of strings.")
-        self.deleteSetting(*key)  # type: ignore  # error in stub.
+        self.deleteSetting(*key)
 
     def remove(self, key: DevPropTuple) -> None:
         """Remove setting for `(devLabel, propLabel)` from the configuration."""
@@ -115,8 +118,10 @@ class Configuration(pymmcore.Configuration):
 
     def extend(
         self,
-        other: pymmcore.Configuration
-        | Iterable[pymmcore.PropertySetting | DevPropValueTuple],
+        other: (
+            pymmcore.Configuration
+            | Iterable[pymmcore.PropertySetting | DevPropValueTuple]
+        ),
     ) -> None:
         """Add all settings from another Configuration."""
         if isinstance(other, pymmcore.Configuration):
@@ -133,10 +138,12 @@ class Configuration(pymmcore.Configuration):
 
     def __contains__(
         self,
-        query: pymmcore.Configuration
-        | pymmcore.PropertySetting
-        | DevPropTuple
-        | DevPropValueTuple,
+        query: (
+            pymmcore.Configuration
+            | pymmcore.PropertySetting
+            | DevPropTuple
+            | DevPropValueTuple
+        ),
     ) -> bool:
         if isinstance(query, pymmcore.Configuration):
             return self.isConfigurationIncluded(query)

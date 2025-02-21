@@ -4,36 +4,31 @@ ci:
   autoupdate_commit_msg: "ci(pre-commit.ci): autoupdate"
 
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+  - repo: https://github.com/crate-ci/typos
+    rev: typos-dict-v0.12.4
     hooks:
-      - id: check-docstring-first
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
+      - id: typos
+        args: [--force-exclude]
 
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: v0.0.275
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.4
     hooks:
       - id: ruff
-        args: [--fix]
-
-  - repo: https://github.com/psf/black
-    rev: 23.3.0
-    hooks:
-      - id: black
+        args: [--fix, --unsafe-fixes]
+      - id: ruff-format
 
   - repo: https://github.com/abravalheri/validate-pyproject
-    rev: v0.13
+    rev: v0.23
     hooks:
       - id: validate-pyproject
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.4.1
+    rev: v1.15.0
     hooks:
       - id: mypy
+        files: "^src/"
         additional_dependencies:
-          - pymmcore
-          - useq-schema
+          - pymmcore >=10.7.0.71.0
+          - useq-schema >= 0.6.2
           - psygnal
           - typer
-        files: "^src/"

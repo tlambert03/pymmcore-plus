@@ -9,14 +9,15 @@ functionality, and some overrides for the sake of convenience or fixed behavior.
 
 This table presents all methods available in the `CMMCorePlus` class, and
 indicates which methods are unique to `CMMCorePlus` (:sparkles:) and which
-methods are overriden from `CMMCore` (:material-plus-thick:).  Below the
+methods are overridden from `CMMCore` (:material-plus-thick:).  Below the
 table, the signatures of all methods are presented, broken into a
 `CMMCorePlus` section and a `CMMCore` section (depending on whether the
 method is implemented in `CMMCorePlus` or not).
 
 <small>
-:material-plus-thick:  *This method is overriden by `CMMCorePlus`.*
-:sparkles:  *This method only exists in `CMMCorePlus`.*
+:material-plus-thick:  *This method is overridden by `CMMCorePlus`.*  
+:sparkles:  *This method only exists in `CMMCorePlus`.*  
+:prohibited:  *This method is deprecated.*  
 </small>
 
 <!-- These are built dynamically in _hooks.py -->
@@ -38,8 +39,6 @@ method is implemented in `CMMCorePlus` or not).
 ----------------
 
 ### TypedDicts
-
-::: pymmcore_plus.core._mmcore_plus.StateDict
 
 ::: pymmcore_plus.core._mmcore_plus.DeviceSchema
 
