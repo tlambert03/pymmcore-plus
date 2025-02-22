@@ -1,33 +1,25 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, TypedDict
+from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
+import annotated_types
 import numpy as np
+
+from .schema import DType, Schema
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Required, TypeAlias, Unpack
 
+    from .context import Context
 
-class Context(TypedDict, total=False): ...
+NonNegativeInt = Annotated[int, annotated_types.Ge(0)]
+PositiveInt = Annotated[int, annotated_types.Ge(1)]
+NonNegativeFloat = Annotated[float, annotated_types.Ge(0)]
 
 
 class IndexTransform(TypedDict, total=False): ...
-
-
-class IndexDomain(TypedDict, total=False): ...
-
-
-class ChunkLayout(TypedDict, total=False): ...
-
-
-class Codec(TypedDict, total=False):
-    """Codecs are specified by a required driver property that identifies the driver.
-
-    All other properties are driver-specific. Refer to the driver documentation for the
-    supported codec drivers and the driver-specific properties.
-    """
 
 
 Zarr3DataType: TypeAlias = Literal[
@@ -49,80 +41,31 @@ Zarr3DataType: TypeAlias = Literal[
     "uint64",
 ]
 
-# super set of Zarr3DataType
-DType: TypeAlias = Literal[
-    Zarr3DataType,
-    "ustring",
-    "string",
-    "json",
-    "float8_e5m2fnuz",
-    "float8_e5m2",
-    "float8_e4m3fnuz",
-    "float8_e4m3fn",
-    "float8_e4m3b11fnuz",
-    "char",
-    "byte",
-]
 
-
-class Schema(TypedDict, total=False):
-    """Specifies constraints on the schema.
-
-    When opening an existing array, specifies constraints on the existing schema;
-    opening will fail if the constraints do not match. Any soft constraints specified in
-    the chunk_layout are ignored. When creating a new array, a suitable schema will be
-    selected automatically based on the specified schema constraints in combination with
-    any driver-specific constraints.
-    """
-
-    rank: int
-    """Number of dimensions.
-
-    The rank is always a hard constraint.
-    """
-    dtype: DType
-    """Specifies the data type of the TensorStore.
-
-    The data type is always a hard constraint.
-    """
-    domain: IndexDomain
-    """Domain of the TensorStore, including bounds and optional dimension labels.
-
-    The domain is always a hard constraint, except that a labeled dimension is allowed
-    to match an unlabeled dimension, and an implicit, infinite bound is considered an
-    unspecified bound and does not impose any constraints. When merging two schema
-    constraint objects that both specify domains, any dimensions that are labeled in
-    both domains must have the same label, and any explicit or finite bounds specified
-    in both domains must be equal. If a dimension is labeled in one domain and unlabeled
-    in the other, the label is retained. If a bound is implicit and infinite in one
-    domain, the bound from the other domain is used.
-    """
-    chunk_layout: ChunkLayout
-    """Data storage layout constraints.
-
-    The rank of the chunk layout must match the rank of the schema. When merging schema
-    constraints objects, the chunk layout constraints are merged recursively.
-    """
-    codec: Codec
-
-
+# See Concrete TensorStoreSpec Union below
+# with driver Literals and their respective specs
 class _TensorStoreSpec(TypedDict, total=False):
     """Specifies a TensorStore to open/create."""
 
-    # driver: Required[str]
+    # driver: Required[str]  # included in each driver spec
     """Driver identifier"""
+
     context: Context | None
     """Specifies context resources that augment/override the parent context."""
+
     dtype: DType | np.typing.DTypeLike
     """Specifies the data type."""
+
     rank: int
     """Specifies the rank of the TensorStore.
 
     If transform is also specified, the input rank must match. Otherwise, the rank
     constraint applies to the driver directly.
     """
+
     transform: IndexTransform
     """Specifies a transform."""
+
     schema: Schema
     """Specifies constraints on the schema.
 
