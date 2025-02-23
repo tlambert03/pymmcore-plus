@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias, TypedDict
 
 from annotated_types import Ge, Interval
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 NonNegativeInt = Annotated[int, Ge(0)]
 PositiveInt = Annotated[int, Ge(1)]
@@ -90,7 +93,7 @@ class IndexDomain(TypedDict, total=False):
     implicit bound of  for the second dimension.
     """
 
-    shape: list[int | list[int]]
+    shape: Sequence[int | list[int]]
     """Extent of each dimension of the domain.
 
     Length must equal the rank. As for inclusive_min, bounds specified as n indicate
@@ -100,13 +103,21 @@ class IndexDomain(TypedDict, total=False):
     dimension.
     """
 
-    labels: list[str]
+    labels: Sequence[str]
     """Dimension labels for each dimension.
 
     Length must equal the rank. An empty string indicates an unlabeled dimension.
     Non-empty strings must not occur more than once. By default, all dimensions are
     unlabeled.
     """
+
+
+ChunkSize: TypeAlias = NonNegativeInt | Literal[-1, None, 0]
+"""
+The special value of 0 (or, equivalently, null) indicates no constraint. The special
+value of -1 indicates that the chunk size should equal the full extent of the domain,
+and is always treated as a soft constraint.
+"""
 
 
 class ChunkLayoutGrid(TypedDict, total=False):
@@ -121,7 +132,7 @@ class ChunkLayoutGrid(TypedDict, total=False):
     elements_soft_constraint are ignored; only shape serves as a constraint.
     """
 
-    shape: list[NonNegativeInt] | Literal[-1] | None
+    shape: Sequence[ChunkSize]
     """Hard constraints on the chunk size for each dimension.
 
     The length must equal the rank of the index space. Each element constrains the chunk
@@ -132,7 +143,7 @@ class ChunkLayoutGrid(TypedDict, total=False):
     constraint.
     """
 
-    shape_soft_constraint: list[NonNegativeInt] | Literal[-1] | None
+    shape_soft_constraint: list[ChunkSize]
     """Preferred chunk sizes for each dimension.
 
     If a non-zero, non-null size for a given dimension is specified in both shape and
@@ -273,8 +284,10 @@ class Codec(TypedDict, total=False):
     """
 
 
-Unit: TypeAlias = tuple[float, str] | str | float
+Unit: TypeAlias = tuple[float, str] | str | float | None
 """Specifies a physical quantity/unit.
+
+`None` indicates an unknown unit along a specific dimension.
 
 The quantity is specified as the combination of:
 
@@ -358,7 +371,7 @@ class Schema(TypedDict, total=False):
     must be broadcast-compatible with the domain.
     """
 
-    dimension_units: list[Unit] | None
+    dimension_units: Sequence[Unit] | None
     """Physical units of each dimension.
 
     Specifies the physical quantity corresponding to an increment of 1 index along each

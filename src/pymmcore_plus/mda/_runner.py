@@ -371,8 +371,18 @@ class MDARunner:
         self._paused_time = 0.0
         self._sequence = sequence
 
-        meta = self._engine.setup_sequence(sequence)
-        self._signals.sequenceStarted.emit(sequence, meta or {})
+        meta = self._engine.setup_sequence(sequence) or {}  # type: ignore
+        for handler in self._handlers:
+            if hasattr(handler, "verify_sequence"):
+                try:
+                    handler.verify_sequence(sequence, meta)
+                except Exception as e:
+                    raise ValueError(
+                        "Cannot proceed with the current sequence. "
+                        f"Error in handler {handler}: {e}"
+                    ) from e
+
+        self._signals.sequenceStarted.emit(sequence, meta)
         logger.info("MDA Started: %s", sequence)
         return self._engine
 

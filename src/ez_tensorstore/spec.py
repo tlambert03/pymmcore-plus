@@ -365,7 +365,8 @@ def _norm_dtype(dtype: np.typing.DTypeLike) -> DType:
 
     dtype = np.dtype(dtype).name
     if dtype not in DType.__args__:  # type: ignore
-        raise ValueError(f"Invalid dtype: {dtype}")
+        msg = f"Invalid dtype: {dtype}"
+        raise ValueError(msg)
     return dtype  # type: ignore
 
 
@@ -390,13 +391,15 @@ def create_zarr3(
         if not isinstance(codecs, (list, tuple)):
             codecs = [codecs]
         if "codecs" in metadata:
-            raise ValueError("Codecs already specified in metadata")
+            msg = "Codecs already specified in metadata"
+            raise ValueError(msg)
         metadata["codecs"] = codecs
 
     if dimension_names is not None:
         if len(dimension_names) != len(shape):
+            msg = f"dimension_names must have the same length as shape: {len(shape)}"
             raise ValueError(
-                f"dimension_names must have the same length as shape: {len(shape)}"
+                msg,
             )
         metadata["dimension_names"] = dimension_names
 
@@ -435,7 +438,7 @@ if __name__ == "__main__":
             dimension_names=("time", "x", "y"),
             dtype=np.int8,
             delete_existing=True,
-        ).result()
+        ).result(),
     )
 
     print(open_zarr3(path=path).result())
