@@ -12,7 +12,7 @@ import numpy as np
 
 from pymmcore_plus.metadata.serialize import to_builtins
 
-from ._5d_writer_base import _5DWriterBase
+from ._5d_writer_base import OMEWriterBase
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 POS_PREFIX = "p"
 
 
-class OMEZarrWriter(_5DWriterBase["zarr.Array"]):
+class OMEZarrWriter(OMEWriterBase["zarr.Array"]):
     """MDA handler that writes to a zarr file following the ome-ngff spec.
 
     This implements v0.4

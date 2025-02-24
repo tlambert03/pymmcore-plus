@@ -24,7 +24,7 @@ POS_PREFIX = "p"
 T = TypeVar("T", bound="SupportsSetItem")
 
 
-class _5DWriterBase(Generic[T]):
+class OMEWriterBase(Generic[T]):
     """Base class for writers that write 5D data to disk.
 
     This is a general-purpose writer that can be used for writers that deal strictly
@@ -73,8 +73,11 @@ class _5DWriterBase(Generic[T]):
         # maps position key to list of frame metadata
         self.frame_metadatas: defaultdict[str, list[FrameMetaV1]] = defaultdict(list)
 
-        # set during sequenceStarted and cleared during sequenceFinished
+        # set during prepare_sequence and cleared during sequenceFinished
         self.current_sequence: useq.MDASequence | None = None
+
+        # set during prepare_sequence
+        self.summary_meta: SummaryMetaV1 | None = None
 
         # list of {dim_name: size} map for each position in the sequence
         self._position_sizes: list[dict[str, int]] = []
@@ -92,6 +95,8 @@ class _5DWriterBase(Generic[T]):
         Will be a list of dicts, where each dict maps dimension names to sizes, and
         the index in the list corresponds to the stage position index.
 
+        e.g: [{"t": 10, "z": 3, "c": 2, "y": 512, "x": 512}, ...]
+
         This is the preferred way to access both the dimensions present in each position
         as well as the sizes of those dimensions.
 
@@ -99,6 +104,12 @@ class _5DWriterBase(Generic[T]):
         shape of each position.
         """
         return self._position_sizes
+
+    def prepare_sequence(self, seq: useq.MDASequence, meta: SummaryMetaV1) -> None:
+        self.frame_metadatas.clear()
+        self.current_sequence = seq
+        self.summary_meta = meta
+        self._position_sizes = position_sizes(seq)
 
     def sequenceStarted(
         self, seq: useq.MDASequence, meta: SummaryMetaV1 | object = _NULL
@@ -113,10 +124,6 @@ class _5DWriterBase(Generic[T]):
                 UserWarning,
                 stacklevel=2,
             )
-        self.frame_metadatas.clear()
-        self.current_sequence = seq
-        if seq:
-            self._position_sizes = position_sizes(seq)
 
     def sequenceFinished(self, seq: useq.MDASequence) -> None:
         """On sequence finished, clear the current sequence."""

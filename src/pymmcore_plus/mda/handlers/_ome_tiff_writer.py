@@ -41,7 +41,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from ._5d_writer_base import _NULL, _5DWriterBase
+from ._5d_writer_base import _NULL, OMEWriterBase
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 IMAGEJ_AXIS_ORDER = "tzcyxs"
 
 
-class OMETiffWriter(_5DWriterBase[np.memmap]):
+class OMETiffWriter(OMEWriterBase[np.memmap]):
     """MDA handler that writes to a 5D OME-TIFF file.
 
     Positions will be split into different files.

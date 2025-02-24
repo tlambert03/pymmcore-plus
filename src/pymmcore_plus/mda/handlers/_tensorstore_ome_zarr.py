@@ -9,6 +9,8 @@ import useq
 
 from ez_tensorstore.schema import ChunkSize, IndexDomain, Schema
 
+from ._5d_writer_base import OMEWriterBase
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from os import PathLike
@@ -23,7 +25,7 @@ if TYPE_CHECKING:
     EventKey: TypeAlias = frozenset[tuple[str, int]]
 
 
-class TensorstoreOMEZarrHandler:
+class TensorstoreOMEZarrHandler(OMEWriterBase["ts.TensorStore"]):  # type: ignore[type-var]
     def __init__(
         self,
         *,
@@ -31,9 +33,9 @@ class TensorstoreOMEZarrHandler:
         path: str | PathLike | None = None,
         delete_existing: bool = False,
         chunks: dict[str, int] | None = None,
-        version: str = "0.5",
+        ome_version: str = "0.5",
     ) -> None:
-        if version != "0.5":
+        if ome_version != "0.5":
             msg = "Only OME-Zarr version 0.5 is currently supported."
             raise ValueError(msg)
 
@@ -79,23 +81,13 @@ class TensorstoreOMEZarrHandler:
 
     def reset(self, sequence: useq.MDASequence) -> None:
         """Reset state to prepare for new `sequence`."""
-        self._frame_index = 0
         self._store = None
         self._futures.clear()
         self._frame_metadatas.clear()
-        self._current_sequence = sequence
 
-    @property
-    def current_sequence(self) -> useq.MDASequence | None:
-        """Return current sequence, or none.
-
-        Use `.reset()` to initialize the handler for a new sequence.
-        """
-        return self._current_sequence
-
-    def verify_sequence(self, seq: useq.MDASequence, meta: SummaryMetaV1) -> None:
+    def prepare_sequence(self, seq: useq.MDASequence, meta: SummaryMetaV1) -> None:
         # place to raise an exception?
-        self.create_spec(seq, meta)
+        super().prepare_sequence(seq, meta)
         if len(seq.used_axes) > 3:
             raise ValueError(
                 "Only 5D data (or less) is currently supported by OME-NGFF."
@@ -107,11 +99,16 @@ class TensorstoreOMEZarrHandler:
             raise ValueError(
                 "Only time, channel, and z are currently supported by OME-NGFF."
             )
+        for size in positi
+        self._create_store(seq, meta)
 
-    def sequenceStarted(self, seq: useq.MDASequence, meta: SummaryMetaV1) -> None:
-        """On sequence started, simply store the sequence."""
-        self.reset(seq)
-        self.create_store(seq, meta)
+    def new_array(
+        self, position_key: str, dtype: np.dtype, dim_sizes: dict[str, int]
+    ) -> ts.TensorStore:
+        spec = self._create_spec(seq, meta)
+        self._create_group()
+        self._store = self._ts.open(spec).result()
+        return self._store
 
     def frameReady(
         self,
@@ -129,16 +126,6 @@ class TensorstoreOMEZarrHandler:
         self._futures.append(future)
         # store, but do not process yet, the frame metadata
         self._frame_metadatas.append((event, meta))
-
-    def create_store(
-        self,
-        seq: useq.MDASequence,
-        meta: SummaryMetaV1,
-    ) -> ts.TensorStore:
-        spec = self.create_spec(seq, meta)
-        self._create_group()
-        self._store = self._ts.open(spec).result()
-        return self._store
 
     def _create_group(self) -> None:
         if self.group_path is not None:
@@ -184,7 +171,7 @@ class TensorstoreOMEZarrHandler:
         dims.extend([y, x])
         return dims
 
-    def create_spec(self, seq: useq.MDASequence, meta: SummaryMetaV1) -> dict:
+    def _create_spec(self, seq: useq.MDASequence, meta: SummaryMetaV1) -> dict:
         self._dims = self._build_dims(seq, meta)
         labels, shape, units, chunk_shape = zip(*self._dims)
         labels = tuple(str(x) for x in labels)

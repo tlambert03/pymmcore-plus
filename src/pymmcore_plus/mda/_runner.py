@@ -373,9 +373,9 @@ class MDARunner:
 
         meta = self._engine.setup_sequence(sequence) or {}  # type: ignore
         for handler in self._handlers:
-            if hasattr(handler, "verify_sequence"):
+            if hasattr(handler, "prepare_sequence"):
                 try:
-                    handler.verify_sequence(sequence, meta)
+                    handler.prepare_sequence(sequence, meta)
                 except Exception as e:
                     raise ValueError(
                         "Cannot proceed with the current sequence. "
