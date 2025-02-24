@@ -41,7 +41,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from ._5d_writer_base import _NULL, OMEWriterBase
+from ._ome_base import _NULL, OMEWriterBase
 
 if TYPE_CHECKING:
     from pathlib import Path

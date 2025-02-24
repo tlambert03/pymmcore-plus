@@ -9,7 +9,7 @@ import useq
 
 from ez_tensorstore.schema import ChunkSize, IndexDomain, Schema
 
-from ._5d_writer_base import OMEWriterBase
+from ._ome_base import OMEWriterBase
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -99,13 +99,11 @@ class TensorstoreOMEZarrHandler(OMEWriterBase["ts.TensorStore"]):  # type: ignor
             raise ValueError(
                 "Only time, channel, and z are currently supported by OME-NGFF."
             )
-        for size in positi
-        self._create_store(seq, meta)
 
     def new_array(
         self, position_key: str, dtype: np.dtype, dim_sizes: dict[str, int]
     ) -> ts.TensorStore:
-        spec = self._create_spec(seq, meta)
+        spec = self._create_spec(dtype, dim_sizes)
         self._create_group()
         self._store = self._ts.open(spec).result()
         return self._store
@@ -147,32 +145,8 @@ class TensorstoreOMEZarrHandler(OMEWriterBase["ts.TensorStore"]):  # type: ignor
         attrs = {"ome": {"version": "0.5", "multiscales": [scale0]}}
         return {"zarr_format": 3, "node_type": "group", "attributes": attrs}
 
-    def _build_dims(self, seq: useq.MDASequence, meta: SummaryMetaV1) -> list[_Dim]:
-        # OME NGFF is pretty strict about dimensions... there may not be more than 5
-        # and they MUST be ordered by type: time, channel, space
-        dims: list[_Dim] = []
-        # for key in (useq.Axis.TIME, useq.Axis.CHANNEL, useq.Axis.Z):
-        for key in seq.sizes:
-            if nt := seq.sizes.get(key):
-                dims.append(
-                    _Dim(
-                        label=key,
-                        size=nt,
-                        unit=_get_unit(key, seq),
-                        chunk_size=self.chunks.get(str(key), 1),
-                    ),
-                )
-
-        img_info = meta["image_infos"][0]
-        px_unit = (img_info.get("pixel_size_um", 1), "um")
-        ny, nx = img_info["plane_shape"]
-        y = _Dim(label="y", size=ny, unit=px_unit, chunk_size=self.chunks.get("y", -1))
-        x = _Dim(label="x", size=nx, unit=px_unit, chunk_size=self.chunks.get("x", -1))
-        dims.extend([y, x])
-        return dims
-
-    def _create_spec(self, seq: useq.MDASequence, meta: SummaryMetaV1) -> dict:
-        self._dims = self._build_dims(seq, meta)
+    def _create_spec(self, dtype: np.dtype, dim_sizes: dict[str, int]) -> dict:
+        self._dims = self._build_dims(dim_sizes)
         labels, shape, units, chunk_shape = zip(*self._dims)
         labels = tuple(str(x) for x in labels)
         return {
@@ -188,16 +162,6 @@ class TensorstoreOMEZarrHandler(OMEWriterBase["ts.TensorStore"]):  # type: ignor
             "delete_existing": self.delete_existing,
         }
 
-
-def _get_unit(k: str, seq: useq.MDASequence) -> tuple[float, str] | None:
-    """Return (mag, unit) tuple for dimension `k`."""
-    if k == useq.Axis.Z and seq.z_plan and hasattr(seq.z_plan, "step"):
-        return (seq.z_plan.step, "um")
-    if k == useq.Axis.TIME and seq.time_plan and hasattr(seq.time_plan, "interval"):
-        if intvl := seq.time_plan.interval.seconds:
-            return (intvl, "s")
-        return (1e-6, "s")
-    return None
 
 
 def _ome_axes_scales(dims: Sequence[_Dim]) -> tuple[list[dict], list[float]]:
@@ -226,30 +190,3 @@ def _ome_axes_scales(dims: Sequence[_Dim]) -> tuple[list[dict], list[float]]:
         )
         scales.append(dim.ome_scale)
     return axes, scales
-
-
-OME_DIM_TYPE = {"y": "space", "x": "space", "z": "space", "t": "time", "c": "channel"}
-OME_UNIT = {"um": "micrometer", "ml": "milliliter", "s": "second", None: "unknown"}
-
-
-class _Dim(NamedTuple):
-    label: str
-    size: int
-    unit: tuple[float, str] | None = None
-    chunk_size: ChunkSize | None = 1  # use -1 for chunk size equal to the full domain
-
-    @property
-    def ome_dim_type(self) -> Literal["space", "time", "channel", "other"]:
-        return OME_DIM_TYPE.get(self.label, "other")  # type: ignore
-
-    @property
-    def ome_unit(self) -> str:
-        if isinstance(self.unit, tuple):
-            return OME_UNIT.get(self.unit[1], "unknown")
-        return "unknown"
-
-    @property
-    def ome_scale(self) -> float:
-        if isinstance(self.unit, tuple):
-            return self.unit[0]
-        return 1.0

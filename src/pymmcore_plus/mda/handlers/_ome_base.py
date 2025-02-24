@@ -3,7 +3,7 @@ from __future__ import annotations
 import warnings
 from abc import abstractmethod
 from collections import defaultdict
-from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Generic, Literal, NamedTuple, Protocol, TypeVar
 
 from ._util import position_sizes
 
@@ -82,8 +82,10 @@ class OMEWriterBase(Generic[T]):
         # list of {dim_name: size} map for each position in the sequence
         self._position_sizes: list[dict[str, int]] = []
 
+        self.chunks: dict[str, int] = {}
+
         # actual timestamps for each frame
-        self._timestamps: list[float] = []
+        # self._timestamps: list[float] = []
 
     # The next three methods - `sequenceStarted`, `sequenceFinished`, and `frameReady`
     # are to be connected directly to the MDA's signals, perhaps via listener_connected
@@ -109,7 +111,18 @@ class OMEWriterBase(Generic[T]):
         self.frame_metadatas.clear()
         self.current_sequence = seq
         self.summary_meta = meta
-        self._position_sizes = position_sizes(seq)
+        self._position_sizes = sizes = position_sizes(seq)
+        self._dims = self._build_dims(sizes[0])
+        self.create_position_arrays(sizes, meta)
+
+    def create_position_arrays(
+        self, position_sizes: list[dict[str, int]], meta: SummaryMetaV1
+    ) -> None:
+        self.position_arrays.clear()
+        for p_index, sizes in enumerate(position_sizes):
+            key = self.get_position_key(p_index)
+            sizes["y"], sizes["x"] = frame.shape[-2:]
+            self.position_arrays[key] = self.new_array(key, frame.dtype, sizes)
 
     def sequenceStarted(
         self, seq: useq.MDASequence, meta: SummaryMetaV1 | object = _NULL
@@ -124,19 +137,6 @@ class OMEWriterBase(Generic[T]):
                 UserWarning,
                 stacklevel=2,
             )
-
-    def sequenceFinished(self, seq: useq.MDASequence) -> None:
-        """On sequence finished, clear the current sequence."""
-        self.finalize_metadata()
-        self.frame_metadatas.clear()
-
-    def get_position_key(self, position_index: int) -> str:
-        """Get the position key for a specific position index.
-
-        This key will be used for subclasses like Zarr that need a directory structure
-        for each position.  And may also be used to index into `self.position_arrays`.
-        """
-        return f"{POS_PREFIX}{position_index}"
 
     def frameReady(
         self, frame: np.ndarray, event: useq.MDAEvent, meta: FrameMetaV1
@@ -166,11 +166,21 @@ class OMEWriterBase(Generic[T]):
             self.position_arrays[key] = ary = self.new_array(key, frame.dtype, sizes)
 
         index = tuple(event.index[k] for k in pos_sizes)
-        t = event.index.get("t", 0)
-        if t >= len(self._timestamps) and "runner_time_ms" in meta:
-            self._timestamps.append(meta["runner_time_ms"])
         self.write_frame(ary, index, frame)
         self.store_frame_metadata(key, event, meta)
+
+    def sequenceFinished(self, seq: useq.MDASequence) -> None:
+        """On sequence finished, clear the current sequence."""
+        self.finalize_metadata()
+        self.frame_metadatas.clear()
+
+    def get_position_key(self, position_index: int) -> str:
+        """Get the position key for a specific position index.
+
+        This key will be used for subclasses like Zarr that need a directory structure
+        for each position.  And may also be used to index into `self.position_arrays`.
+        """
+        return f"{POS_PREFIX}{position_index}"
 
     @abstractmethod
     def new_array(
@@ -292,3 +302,68 @@ class OMEWriterBase(Generic[T]):
         full = slice(None, None)
         index = tuple(indexers.get(k, full) for k in sizes)
         return data[index]  # type: ignore
+
+    def _build_dims(self, dim_sizes: dict[str, int]) -> list[_Dim]:
+        # OME NGFF is pretty strict about dimensions... there may not be more than 5
+        # and they MUST be ordered by type: time, channel, space
+        dims: list[_Dim] = []
+        # for key in (useq.Axis.TIME, useq.Axis.CHANNEL, useq.Axis.Z):
+        for key in dim_sizes:
+            if nt := dim_sizes.get(key):
+                dims.append(
+                    _Dim(
+                        label=key,
+                        size=nt,
+                        unit=_get_unit(key, self.current_sequence),
+                    ),
+                )
+
+        img_info = meta["image_infos"][0]
+        px_unit = (img_info.get("pixel_size_um", 1), "um")
+        ny, nx = img_info["plane_shape"]
+        y = _Dim(label="y", size=ny, unit=px_unit)
+        x = _Dim(label="x", size=nx, unit=px_unit)
+        dims.extend([y, x])
+        return dims
+
+
+OME_DIM_TYPE = {"y": "space", "x": "space", "z": "space", "t": "time", "c": "channel"}
+OME_UNIT = {"um": "micrometer", "ml": "milliliter", "s": "second", None: "unknown"}
+
+
+class _Dim(NamedTuple):
+    label: str
+    size: int
+    unit: tuple[float, str] | None = None
+    # None or 0 indicates no constraint.
+    # -1 indicates that the chunk size should equal the full extent of the domain.
+    chunk_size: int | None = 1
+
+    @property
+    def ome_dim_type(self) -> Literal["space", "time", "channel", "other"]:
+        return OME_DIM_TYPE.get(self.label, "other")  # type: ignore
+
+    @property
+    def ome_unit(self) -> str:
+        if isinstance(self.unit, tuple):
+            return OME_UNIT.get(self.unit[1], "unknown")
+        return "unknown"
+
+    @property
+    def ome_scale(self) -> float:
+        if isinstance(self.unit, tuple):
+            return self.unit[0]
+        return 1.0
+
+
+def _get_unit(k: str, seq: useq.MDASequence | None) -> tuple[float, str] | None:
+    """Return (mag, unit) tuple for dimension `k`."""
+    if seq is None:
+        return None
+    if k == useq.Axis.Z and seq.z_plan and hasattr(seq.z_plan, "step"):
+        return (seq.z_plan.step, "um")
+    if k == useq.Axis.TIME and seq.time_plan and hasattr(seq.time_plan, "interval"):
+        if intvl := seq.time_plan.interval.seconds:
+            return (intvl, "s")
+        return (1e-6, "s")
+    return None

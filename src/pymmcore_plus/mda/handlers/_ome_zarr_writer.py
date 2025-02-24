@@ -12,7 +12,7 @@ import numpy as np
 
 from pymmcore_plus.metadata.serialize import to_builtins
 
-from ._5d_writer_base import OMEWriterBase
+from ._ome_base import OMEWriterBase
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping, Sequence
