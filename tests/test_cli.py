@@ -44,6 +44,7 @@ def _mock_run(dest: Path) -> Callable:
 
     def runner(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess:
         if not args and args[0]:
+            breakpoint()
             return subrun(*args, **kwargs)
         if args[0][0] == "hdiutil":
             if args[0][1] == "attach":

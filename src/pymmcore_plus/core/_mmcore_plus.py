@@ -7,8 +7,10 @@ import time
 import warnings
 import weakref
 from collections import defaultdict
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager, suppress
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from re import Pattern
 from textwrap import dedent
@@ -109,6 +111,26 @@ if TYPE_CHECKING:
         XYPosition: tuple[float, float] | tuple[str, float, float]
         XYStageDevice: str
         ZPosition: float | tuple[str, float]
+
+    class SetterKwargs(SetContextKwargs, total=False):
+        adapterOrigin: float | tuple[str, float]
+        adapterOriginXY: tuple[float, float] | tuple[str, float, float]
+        config: tuple[str, str]
+        galvoIlluminationState: tuple[str, bool]
+        galvoPolygonRepetitions: tuple[str, int]
+        galvoSpotInterval: tuple[str, float]
+        origin: tuple[()] | tuple[str]
+        originX: tuple[()] | tuple[str]
+        originY: tuple[()] | tuple[str]
+        originXY: tuple[()] | tuple[str]
+        pixelSizeConfig: str
+        relativePosition: float | tuple[str, float]
+        relativeXYPosition: tuple[float, float] | tuple[str, float, float]
+        SLMImage: tuple[str, Any]
+        SLMPixelsTo: tuple[str, int] | tuple[str, int, int, int]
+        serialPortCommand: tuple[str, str, str]
+        serialProperties: tuple[str, str, str, str, str, str, str]
+        stageLinearSequence: tuple[str, float, int]
 
 
 _OBJDEV_REGEX = re.compile("(.+)?(nosepiece|obj(ective)?)(turret)?s?", re.IGNORECASE)
@@ -304,6 +326,10 @@ class CMMCorePlus(pymmcore.CMMCore):
         """
         with self._property_change_emission_ensured(stateDeviceLabel, STATE_PROPS):
             super().setStateLabel(stateDeviceLabel, stateLabel)
+
+    @property
+    def task(self) -> TaskRunner:
+        return TaskRunner(self)
 
     def setDeviceAdapterSearchPaths(self, paths: Sequence[str]) -> None:
         """Set the device adapter search paths.
@@ -1445,6 +1471,9 @@ class CMMCorePlus(pymmcore.CMMCore):
             raise ValueError(
                 "Cannot start an MDA while the previous MDA is still running."
             )
+
+        # TODO: use global executor... but that will be difficult to maintain the same
+        # API of returning a thread object.
         th = Thread(target=self.mda.run, args=(events,), kwargs={"output": output})
         th.start()
         if block:
@@ -2186,6 +2215,35 @@ class CMMCorePlus(pymmcore.CMMCore):
                 with suppress(AttributeError):
                     getattr(self, f"set{k}")(v)
 
+    def setInThread(
+        self,
+        await_devices: bool = True,
+        **kwargs: Unpack[SetterKwargs],
+    ) -> Future[None]:
+        partials: list[tuple[str | None, partial]] = []
+        for name, args in kwargs.items():
+            name = name[0].upper() + name[1:]
+            method_name = f"set{name}"
+            if not hasattr(self, method_name):
+                logger.warning("%s is not a valid property, skipping.", name)
+                continue
+            setter = getattr(self, method_name)
+            if not isinstance(args, tuple):
+                args = (args,)
+            dev_label = _dev_label(self, method_name, args)
+            partials.append((dev_label, partial(setter, *args)))
+
+        # call all partials in a thread
+        def _call_partials() -> None:
+            for _, p in partials:
+                p()
+            if await_devices:
+                for dev, _ in partials:
+                    if dev:
+                        self.waitForDevice(dev)
+
+        return _executor().submit(_call_partials)
+
     def canSequenceEvents(
         self, e1: MDAEvent, e2: MDAEvent, cur_length: int = -1
     ) -> bool:
@@ -2306,3 +2364,88 @@ MMCallbackRelay = type(
         if n.startswith("on")
     },
 )
+
+_EXECUTOR: ThreadPoolExecutor | None = None
+
+
+def _executor() -> ThreadPoolExecutor:
+    global _EXECUTOR
+    if _EXECUTOR is None:
+        _EXECUTOR = ThreadPoolExecutor(max_workers=4)
+    return _EXECUTOR
+
+
+class TaskRunner:
+    def __init__(self, core: CMMCorePlus) -> None:
+        self.core = core
+
+    @overload
+    def setRelativeXYPosition(self, dx: float, dy: float, /) -> Future[None]: ...
+    @overload
+    def setRelativeXYPosition(
+        self, xyStageLabel: str, dx: float, dy: float, /
+    ) -> Future[None]: ...
+    def setRelativeXYPosition(self, *args: Any) -> Future[None]:
+        """Sets the relative position of the XY stage in microns."""
+        xyStageLabel = args[0] if len(args) == 3 else self.core.getXYStageDevice()
+        return self._do_in_thread(
+            self.core.setRelativeXYPosition, *args, device_label=xyStageLabel
+        )
+
+    def _do_in_thread(
+        self, method: Callable, *args: Any, device_label: str | None = None
+    ) -> Future[None]:
+        # do it in a thread
+        def _set_position() -> None:
+            method(*args)
+            if device_label:
+                self.core.waitForDevice(device_label)
+
+        return _executor().submit(_set_position)
+
+
+def _dev_label(core: CMMCorePlus, method_name: str, args: tuple) -> str | None:
+    """
+    Return the device label for a given method name and arguments.
+
+    For methods that have an overload without an explicit device label,
+    the corresponding getter on core is called to retrieve the implicit device.
+    Otherwise, if the device label is provided in the arguments (assumed to be the
+    first element) it is returned.
+    """
+    # Mapping for methods that support an implicit device.
+    # Each entry maps the method name to a tuple:
+    #   (explicit_arg_count, getter_method_name)
+    # where "explicit_arg_count" is the number of arguments in the overload
+    # that explicitly accepts a device label.
+    optional_getters: dict[str, tuple[int, str]] = {
+        "setAdapterOrigin": (2, "getAdapterOriginDevice"),
+        "setAdapterOriginXY": (3, "getXYStageDevice"),
+        "setExposure": (2, "getCameraDevice"),
+        "setOrigin": (1, "getStageDevice"),
+        "setOriginX": (1, "getXYStageDevice"),
+        "setOriginXY": (1, "getXYStageDevice"),
+        "setOriginY": (1, "getXYStageDevice"),
+        "setPosition": (2, "getStageDevice"),
+        "setRelativePosition": (2, "getStageDevice"),
+        "setRelativeXYPosition": (3, "getXYStageDevice"),
+        "setROI": (5, "getCameraDevice"),
+        "setShutterOpen": (2, "getShutterDevice"),
+        "setXYPosition": (3, "getXYStageDevice"),
+    }
+
+    if method_name in optional_getters:
+        explicit_arg_count, getter_name = optional_getters[method_name]
+        # If a device label is provided (explicit overload),
+        # then args length equals the explicit count.
+        if len(args) == explicit_arg_count:
+            return str(args[0])
+        # Otherwise, assume the device label is implicit.
+        else:
+            getter = getattr(core, getter_name, None)
+            if callable(getter):
+                return getter()  # type: ignore
+
+    # For methods that always require an explicit device label,
+    # if the first argument is a string, return it.
+    return str(args[0]) if args else None
