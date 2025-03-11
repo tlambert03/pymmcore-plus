@@ -2230,7 +2230,7 @@ class CMMCorePlus(pymmcore.CMMCore):
             setter = getattr(self, method_name)
             if not isinstance(args, tuple):
                 args = (args,)
-            dev_label = _dev_label(self, method_name, args)
+            dev_label = _device_label_for(self, method_name, args)
             partials.append((dev_label, partial(setter, *args)))
 
         # call all partials in a thread
@@ -2375,36 +2375,7 @@ def _executor() -> ThreadPoolExecutor:
     return _EXECUTOR
 
 
-class TaskRunner:
-    def __init__(self, core: CMMCorePlus) -> None:
-        self.core = core
-
-    @overload
-    def setRelativeXYPosition(self, dx: float, dy: float, /) -> Future[None]: ...
-    @overload
-    def setRelativeXYPosition(
-        self, xyStageLabel: str, dx: float, dy: float, /
-    ) -> Future[None]: ...
-    def setRelativeXYPosition(self, *args: Any) -> Future[None]:
-        """Sets the relative position of the XY stage in microns."""
-        xyStageLabel = args[0] if len(args) == 3 else self.core.getXYStageDevice()
-        return self._do_in_thread(
-            self.core.setRelativeXYPosition, *args, device_label=xyStageLabel
-        )
-
-    def _do_in_thread(
-        self, method: Callable, *args: Any, device_label: str | None = None
-    ) -> Future[None]:
-        # do it in a thread
-        def _set_position() -> None:
-            method(*args)
-            if device_label:
-                self.core.waitForDevice(device_label)
-
-        return _executor().submit(_set_position)
-
-
-def _dev_label(core: CMMCorePlus, method_name: str, args: tuple) -> str | None:
+def _device_label_for(core: CMMCorePlus, method_name: str, args: tuple) -> str | None:
     """
     Return the device label for a given method name and arguments.
 
@@ -2418,20 +2389,22 @@ def _dev_label(core: CMMCorePlus, method_name: str, args: tuple) -> str | None:
     #   (explicit_arg_count, getter_method_name)
     # where "explicit_arg_count" is the number of arguments in the overload
     # that explicitly accepts a device label.
-    optional_getters: dict[str, tuple[int, str]] = {
-        "setAdapterOrigin": (2, "getAdapterOriginDevice"),
-        "setAdapterOriginXY": (3, "getXYStageDevice"),
-        "setExposure": (2, "getCameraDevice"),
-        "setOrigin": (1, "getStageDevice"),
-        "setOriginX": (1, "getXYStageDevice"),
-        "setOriginXY": (1, "getXYStageDevice"),
-        "setOriginY": (1, "getXYStageDevice"),
-        "setPosition": (2, "getStageDevice"),
-        "setRelativePosition": (2, "getStageDevice"),
-        "setRelativeXYPosition": (3, "getXYStageDevice"),
+    optional_getters: dict[str, tuple[int, None | Callable[[], str]]] = {
+        "setAdapterOrigin": (2, core.getFocusDevice),
+        "setAdapterOriginXY": (3, core.getXYStageDevice),
+        "setAutoFocusOffset": (99, core.getAutoFocusDevice),  # never explicit
+        "setDeviceDelayMs": (2, None),  # always explicit
+        "setExposure": (2, core.getCameraDevice),
+        "setOrigin": (1, core.getFocusDevice),
+        "setOriginX": (1, core.getXYStageDevice),
+        "setOriginXY": (1, core.getXYStageDevice),
+        "setOriginY": (1, core.getXYStageDevice),
+        "setPosition": (2, core.getFocusDevice),
+        "setRelativePosition": (2, core.getFocusDevice),
+        "setRelativeXYPosition": (3, core.getXYStageDevice),
         "setROI": (5, "getCameraDevice"),
         "setShutterOpen": (2, "getShutterDevice"),
-        "setXYPosition": (3, "getXYStageDevice"),
+        "setXYPosition": (3, core.getXYStageDevice),
     }
 
     if method_name in optional_getters:
