@@ -327,10 +327,6 @@ class CMMCorePlus(pymmcore.CMMCore):
         with self._property_change_emission_ensured(stateDeviceLabel, STATE_PROPS):
             super().setStateLabel(stateDeviceLabel, stateLabel)
 
-    @property
-    def task(self) -> TaskRunner:
-        return TaskRunner(self)
-
     def setDeviceAdapterSearchPaths(self, paths: Sequence[str]) -> None:
         """Set the device adapter search paths.
 
@@ -2220,7 +2216,27 @@ class CMMCorePlus(pymmcore.CMMCore):
         await_devices: bool = True,
         **kwargs: Unpack[SetterKwargs],
     ) -> Future[None]:
-        partials: list[tuple[str | None, partial]] = []
+        """Call core setter in a non-blocking thread.
+
+        :sparkles: *This method is new in `CMMCorePlus`.*
+
+        Parameters
+        ----------
+        await_devices : bool
+            Whether to wait for relevant devices before ending the thread.
+        **kwargs : Any
+            Keyword arguments may be any `Name` for which `set<Name>` methods exist
+            (where the first letter in `<Name>` may be either lower or upper case).  For
+            example, `setContext(relativeXYPosition=(2, 2))` will call
+            `setRelativeXYPosition(2, 2)` in a thread, and, if `await_devices` is True,
+            will wait for the relevant devices before ending the thread.
+
+            If the setter is not found, a warning is logged and the property is
+            skipped. If the value is a tuple, it is unpacked and passed to the
+            `set<Name>` method (but lists are not unpacked).
+        """
+        partials: list[partial] = []
+        devices: list[str] = []
         for name, args in kwargs.items():
             name = name[0].upper() + name[1:]
             method_name = f"set{name}"
@@ -2230,17 +2246,17 @@ class CMMCorePlus(pymmcore.CMMCore):
             setter = getattr(self, method_name)
             if not isinstance(args, tuple):
                 args = (args,)
-            dev_label = _device_label_for(self, method_name, args)
-            partials.append((dev_label, partial(setter, *args)))
+            partials.append(partial(setter, *args))
+            if dev_label := _device_label_for(self, method_name, args):
+                devices.append(dev_label)
 
         # call all partials in a thread
         def _call_partials() -> None:
-            for _, p in partials:
+            for p in partials:
                 p()
             if await_devices:
-                for dev, _ in partials:
-                    if dev:
-                        self.waitForDevice(dev)
+                for dev in devices:
+                    self.waitForDevice(dev)
 
         return _executor().submit(_call_partials)
 
@@ -2402,22 +2418,19 @@ def _device_label_for(core: CMMCorePlus, method_name: str, args: tuple) -> str |
         "setPosition": (2, core.getFocusDevice),
         "setRelativePosition": (2, core.getFocusDevice),
         "setRelativeXYPosition": (3, core.getXYStageDevice),
-        "setROI": (5, "getCameraDevice"),
-        "setShutterOpen": (2, "getShutterDevice"),
+        "setROI": (5, core.getCameraDevice),
+        "setShutterOpen": (2, core.getShutterDevice),
         "setXYPosition": (3, core.getXYStageDevice),
     }
 
     if method_name in optional_getters:
-        explicit_arg_count, getter_name = optional_getters[method_name]
+        explicit_arg_count, getter = optional_getters[method_name]
         # If a device label is provided (explicit overload),
         # then args length equals the explicit count.
         if len(args) == explicit_arg_count:
             return str(args[0])
         # Otherwise, assume the device label is implicit.
-        else:
-            getter = getattr(core, getter_name, None)
-            if callable(getter):
-                return getter()  # type: ignore
+        return getter()  # type: ignore
 
     # For methods that always require an explicit device label,
     # if the first argument is a string, return it.
