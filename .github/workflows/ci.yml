@@ -35,9 +35,9 @@ jobs:
             qt: "PyQt6"
           - platform: ubuntu-latest
             python-version: "3.12"
-          # - platform: windows-latest
-          #   python-version: "3.13"
-          #   qt: "PyQt6"
+          - platform: windows-latest
+            python-version: "3.13"
+            qt: "PyQt6"
 
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +68,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CACHE_PATH }}
-          key: ${{ runner.os }}-mmbuild-${{ hashFiles('src/pymmcore_plus/_build.py') }}
+          key: ${{ runner.os }}-mmbuild-73-${{ hashFiles('src/pymmcore_plus/_build.py') }}
 
       - name: Build Micro-Manager
         if: runner.os == 'Linux' && steps.cache-mm-build.outputs.cache-hit != 'true'
@@ -126,7 +126,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CACHE_PATH }}
-          key: ${{ runner.os }}-mmbuild-${{ hashFiles('src/pymmcore_plus/_build.py') }}
+          key: ${{ runner.os }}-mmbuild-73-${{ hashFiles('src/pymmcore_plus/_build.py') }}
 
       - name: Install Micro-Manager
         if: steps.cache-mm-build.outputs.cache-hit != 'true'
@@ -139,7 +139,7 @@ jobs:
     uses: pyapp-kit/workflows/.github/workflows/test-dependents.yml@main
     with:
       os: windows-latest
-      python-version: "3.10"
+      python-version: "3.12"
       dependency-repo: ${{ matrix.repo }}
       dependency-extras: "test"
       post-install-cmd: "mmcore install"
@@ -172,7 +172,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.local/share/pymmcore-plus/
-          key: ${{ runner.os }}-mmbuild-${{ hashFiles('src/pymmcore_plus/_build.py') }}
+          key: ${{ runner.os }}-mmbuild-73-${{ hashFiles('src/pymmcore_plus/_build.py') }}
 
       - name: Build Micro-Manager
         if: steps.cache-mm-build.outputs.cache-hit != 'true'
