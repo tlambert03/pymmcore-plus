@@ -4,9 +4,10 @@ import time
 import warnings
 import weakref
 from contextlib import suppress
+from dataclasses import dataclass, field
 from functools import cache
 from itertools import product
-from typing import TYPE_CHECKING, Literal, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 import numpy as np
 import useq
@@ -56,6 +57,222 @@ _SLM_DEVICES_PIXEL_ON_VALUES: dict[str, int] = {
     "Mosaic3": 1,
     "GenericSLM": 255,
 }
+
+
+@dataclass(slots=True)
+class MDAState:
+    """Unified state tracking for MDA hardware operations.
+
+    Tracks the last known state of all hardware to avoid redundant mmcore calls.
+    This replaces scattered caching logic with a unified framework.
+    """
+
+    # Position tracking
+    xy_position: tuple[float, float] | None = None
+    z_position: float | None = None
+
+    # Channel and config tracking
+    channel_config: tuple[str, str] | None = None
+
+    # Camera and exposure tracking
+    exposure: float | None = None
+
+    # Shutter tracking
+    autoshutter: bool | None = None
+    shutter_open: bool | None = None
+
+    # Property tracking - maps (device, property) -> value
+    properties: dict[tuple[str, str], str] = field(default_factory=dict)
+
+    # SLM state tracking
+    slm_device: str | None = None
+    slm_exposure: float | None = None
+    slm_pixels: Any = None  # Could be array or scalar value
+
+    # Sequenced event caching
+    cached_sequenced_event: SequencedEvent | None = None
+
+    def reset(self) -> None:
+        """Reset all cached state (typically called at start of new sequence)."""
+        self.xy_position = None
+        self.z_position = None
+        self.channel_config = None
+        self.exposure = None
+        self.autoshutter = None
+        self.shutter_open = None
+        self.properties.clear()
+        self.slm_device = None
+        self.slm_exposure = None
+        self.slm_pixels = None
+        self.cached_sequenced_event = None
+
+    def should_set_xy_position(
+        self, x: float, y: float, *, force: bool = False
+    ) -> bool:
+        """Check if XY position should be set."""
+        if force or self.xy_position is None:
+            return True
+        return (x, y) != self.xy_position
+
+    def should_set_z_position(self, z: float) -> bool:
+        """Check if Z position should be set."""
+        return self.z_position != z
+
+    def should_set_config(self, group: str, config: str) -> bool:
+        """Check if channel config should be set."""
+        return (group, config) != self.channel_config
+
+    def should_set_exposure(self, exposure: float) -> bool:
+        """Check if exposure should be set."""
+        return self.exposure != exposure
+
+    def should_set_autoshutter(self, enabled: bool) -> bool:
+        """Check if autoshutter state should be changed."""
+        return self.autoshutter != enabled
+
+    def should_set_shutter_open(self, open_state: bool) -> bool:
+        """Check if shutter open state should be changed."""
+        return self.shutter_open != open_state
+
+    def should_set_property(self, device: str, prop: str, value: str) -> bool:
+        """Check if device property should be set."""
+        return self.properties.get((device, prop)) != value
+
+    def should_set_slm_exposure(self, device: str, exposure: float) -> bool:
+        """Check if SLM exposure should be set."""
+        return self.slm_device != device or self.slm_exposure != exposure
+
+    def should_set_slm_pixels(self, device: str, pixels: Any) -> bool:
+        """Check if SLM pixels should be set."""
+        if self.slm_device != device:
+            return True
+        if self.slm_pixels is None:
+            return True
+
+        # Handle different pixel types
+        try:
+            if hasattr(pixels, "shape") and hasattr(self.slm_pixels, "shape"):
+                # Compare numpy arrays
+                import numpy as np
+
+                return not np.array_equal(pixels, self.slm_pixels)
+            else:
+                # Compare scalar values
+                return pixels != self.slm_pixels
+        except Exception:
+            # If comparison fails, be safe and return True
+            return True
+
+    # Update methods to track state after successful calls
+    def update_xy_position(self, x: float, y: float) -> None:
+        """Update tracked XY position after successful mmcore call."""
+        self.xy_position = (x, y)
+
+    def update_z_position(self, z: float) -> None:
+        """Update tracked Z position after successful mmcore call."""
+        self.z_position = z
+
+    def update_config(self, group: str, config: str) -> None:
+        """Update tracked channel config after successful mmcore call."""
+        self.channel_config = (group, config)
+
+    def update_exposure(self, exposure: float) -> None:
+        """Update tracked exposure after successful mmcore call."""
+        self.exposure = exposure
+
+    def update_autoshutter(self, enabled: bool) -> None:
+        """Update tracked autoshutter state after successful mmcore call."""
+        self.autoshutter = enabled
+
+    def update_shutter_open(self, open_state: bool) -> None:
+        """Update tracked shutter state after successful mmcore call."""
+        self.shutter_open = open_state
+
+    def update_property(self, device: str, prop: str, value: str) -> None:
+        """Update tracked property value after successful mmcore call."""
+        self.properties[(device, prop)] = value
+
+    def update_slm_exposure(self, device: str, exposure: float) -> None:
+        """Update tracked SLM exposure after successful mmcore call."""
+        self.slm_device = device
+        self.slm_exposure = exposure
+
+    def update_slm_pixels(self, device: str, pixels: Any) -> None:
+        """Update tracked SLM pixels after successful mmcore call."""
+        self.slm_device = device
+        self.slm_pixels = pixels
+
+    def should_reload_exposure_sequence(self, sequence: tuple | list | None) -> bool:
+        """Check if exposure sequence should be reloaded."""
+        if self.cached_sequenced_event is None:
+            return sequence is not None
+        return not self._sequences_equal(
+            sequence, self.cached_sequenced_event.exposure_sequence
+        )
+
+    def should_reload_xy_sequence(
+        self, x_seq: tuple | list | None, y_seq: tuple | list | None
+    ) -> bool:
+        """Check if XY stage sequences should be reloaded."""
+        if self.cached_sequenced_event is None:
+            return x_seq is not None or y_seq is not None
+        cached = self.cached_sequenced_event
+        return not (
+            self._sequences_equal(x_seq, cached.x_sequence)
+            and self._sequences_equal(y_seq, cached.y_sequence)
+        )
+
+    def should_reload_z_sequence(self, sequence: tuple | list | None) -> bool:
+        """Check if Z stage sequence should be reloaded."""
+        if self.cached_sequenced_event is None:
+            return sequence is not None
+        return not self._sequences_equal(
+            sequence, self.cached_sequenced_event.z_sequence
+        )
+
+    def should_reload_slm_sequence(self, sequence: tuple | list | None) -> bool:
+        """Check if SLM sequence should be reloaded."""
+        if self.cached_sequenced_event is None:
+            return sequence is not None
+        return not self._sequences_equal(
+            sequence, self.cached_sequenced_event.slm_sequence
+        )
+
+    def should_reload_property_sequences(
+        self, sequences: dict[tuple[str, str], tuple] | None
+    ) -> bool:
+        """Check if property sequences should be reloaded."""
+        if self.cached_sequenced_event is None:
+            return sequences is not None
+        return not self._property_sequences_equal(
+            sequences, self.cached_sequenced_event.property_sequences
+        )
+
+    def _sequences_equal(
+        self, seq1: tuple | list | None, seq2: tuple | list | None
+    ) -> bool:
+        """Compare two sequences for equality, handling None values."""
+        if seq1 is None and seq2 is None:
+            return True
+        if seq1 is None or seq2 is None:
+            return False
+        return tuple(seq1) == tuple(seq2)
+
+    def _property_sequences_equal(
+        self,
+        props1: dict[tuple[str, str], tuple] | None,
+        props2: dict[tuple[str, str], tuple] | None,
+    ) -> bool:
+        """Compare property sequences for equality."""
+        if props1 is None and props2 is None:
+            return True
+        if props1 is None or props2 is None:
+            return False
+        if set(props1.keys()) != set(props2.keys()):
+            return False
+        return all(
+            self._sequences_equal(props1[key], props2[key]) for key in props1.keys()
+        )
 
 
 class MDAEngine(PMDAEngine):
@@ -125,8 +342,8 @@ class MDAEngine(PMDAEngine):
         # Note: getAutoShutter() is True when no config is loaded at all
         self._autoshutter_was_set: bool = mmc.getAutoShutter()
 
-        self._last_config: tuple[str, str] = ("", "")
-        self._last_xy_pos: tuple[float | None, float | None] = (None, None)
+        # unified state tracking for all hardware operations
+        self._state = MDAState()
 
         # -----
         # The following values are stored during setup_sequence simply to speed up
@@ -151,9 +368,9 @@ class MDAEngine(PMDAEngine):
     @property
     def mmcore(self) -> CMMCorePlus:
         """The `CMMCorePlus` instance to use for hardware control."""
-        if (mmc := self._mmcore_ref()) is None:  # pragma: no cover
+        if (mmcore := self._mmcore_ref()) is None:  # pragma: no cover
             raise RuntimeError("The CMMCorePlus instance has been garbage collected.")
-        return mmc
+        return mmcore
 
     # ===================== Protocol Implementation =====================
 
@@ -161,31 +378,34 @@ class MDAEngine(PMDAEngine):
         """Setup the hardware for the entire sequence."""
         # clear z_correction for new sequence
         self._z_correction.clear()
+        # reset all cached hardware state for new sequence
+        self._state.reset()
 
-        if not (core := self._mmcore_ref()):  # pragma: no cover
+        if not (mmcore := self._mmcore_ref()):  # pragma: no cover
             from pymmcore_plus.core import CMMCorePlus
 
-            core = CMMCorePlus.instance()
-            self._mmcore_ref = weakref.ref(core)
+            mmcore = CMMCorePlus.instance()
+            self._mmcore_ref = weakref.ref(mmcore)
 
         self._update_config_device_props()
         # get if the autofocus is engaged at the start of the sequence
-        self._af_was_engaged = core.isContinuousFocusLocked()
+        self._af_was_engaged = mmcore.isContinuousFocusLocked()
 
         # capture initial state if restoration is enabled
         if self.restore_initial_state is None:
-            fd = core.getFocusDevice()
+            fd = mmcore.getFocusDevice()
             self.restore_initial_state = (
-                fd is not None and core.getFocusDirection(fd) != FocusDirection.Unknown
+                fd is not None
+                and mmcore.getFocusDirection(fd) != FocusDirection.Unknown
             )
 
         if self.restore_initial_state:
             self._initial_state = self._capture_state()
 
-        if px_size := core.getPixelSizeUm():
+        if px_size := mmcore.getPixelSizeUm():
             self._update_grid_fov_sizes(px_size, sequence)
 
-        self._autoshutter_was_set = core.getAutoShutter()
+        self._autoshutter_was_set = mmcore.getAutoShutter()
         return self.get_summary_metadata(mda_sequence=sequence)
 
     def get_summary_metadata(self, mda_sequence: MDASequence | None) -> SummaryMetaV1:
@@ -223,10 +443,10 @@ class MDAEngine(PMDAEngine):
     def exec_event(self, event: MDAEvent) -> Iterable[PImagePayload]:
         """Execute an individual event and return the image data."""
         action = getattr(event, "action", None)
-        core = self.mmcore
+        mmcore = self.mmcore
         if isinstance(action, HardwareAutofocus):
             # skip if no autofocus device is found
-            if not core.getAutoFocusDevice():
+            if not mmcore.getAutoFocusDevice():
                 logger.warning("No autofocus device found. Cannot execute autofocus.")
                 return
 
@@ -256,7 +476,7 @@ class MDAEngine(PMDAEngine):
         # did not fail, re-engage it. NOTE: we need to do that AFTER the runner calls
         # `setup_event`, so we can't do it inside the exec_event autofocus action above.
         if self._af_was_engaged and self._af_succeeded:
-            core.enableContinuousFocus(True)
+            mmcore.enableContinuousFocus(True)
 
         if isinstance(event, SequencedEvent):
             yield from self.exec_sequenced_event(event)
@@ -299,16 +519,24 @@ class MDAEngine(PMDAEngine):
 
         mmcore = self.mmcore
         if event.exposure is not None:
-            try:
-                mmcore.setExposure(event.exposure)
-            except Exception as e:
-                logger.warning("Failed to set exposure. %s", e)
+            # Check if we should set the exposure using unified state tracking
+            if self._state.should_set_exposure(event.exposure):
+                try:
+                    mmcore.setExposure(event.exposure)
+                    self._state.update_exposure(event.exposure)
+                except Exception as e:
+                    logger.warning("Failed to set exposure. %s", e)
         if event.properties is not None:
-            try:
-                for dev, prop, value in event.properties:
-                    mmcore.setProperty(dev, prop, value)
-            except Exception as e:
-                logger.warning("Failed to set properties. %s", e)
+            for dev, prop, value in event.properties:
+                # Check if we should set the property using unified state tracking
+                if self._state.should_set_property(dev, prop, value):
+                    try:
+                        mmcore.setProperty(dev, prop, value)
+                        self._state.update_property(dev, prop, value)
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to set property %s::%s. %s", dev, prop, e
+                        )
         if (
             # (if autoshutter wasn't set at the beginning of the sequence
             # then it never matters...)
@@ -319,8 +547,19 @@ class MDAEngine(PMDAEngine):
             and mmcore.getAutoShutter()
         ):
             # we have to disable autoshutter and open the shutter
-            mmcore.setAutoShutter(False)
-            mmcore.setShutterOpen(True)
+            if self._state.should_set_autoshutter(False):
+                try:
+                    mmcore.setAutoShutter(False)
+                    self._state.update_autoshutter(False)
+                except Exception as e:
+                    logger.warning("Failed to set autoshutter. %s", e)
+
+            if self._state.should_set_shutter_open(True):
+                try:
+                    mmcore.setShutterOpen(True)
+                    self._state.update_shutter_open(True)
+                except Exception as e:
+                    logger.warning("Failed to open shutter. %s", e)
 
     def exec_single_event(self, event: MDAEvent) -> Iterator[PImagePayload]:
         """Execute a single (non-triggered) event and return the image data.
@@ -345,7 +584,12 @@ class MDAEngine(PMDAEngine):
             logger.warning("Failed to snap image. %s", e)
             return
         if not event.keep_shutter_open:
-            mmcore.setShutterOpen(False)
+            if self._state.should_set_shutter_open(False):
+                try:
+                    mmcore.setShutterOpen(False)
+                    self._state.update_shutter_open(False)
+                except Exception as e:
+                    logger.warning("Failed to close shutter. %s", e)
 
         # most cameras will only have a single channel
         # but Multi-camera may have multiple, and we need to retrieve a buffer for each
@@ -387,20 +631,25 @@ class MDAEngine(PMDAEngine):
         """Teardown state of system (hardware, etc.) after `event`."""
         # autoshutter was set at the beginning of the sequence, and this event
         # doesn't want to leave the shutter open.  Re-enable autoshutter.
-        core = self.mmcore
+        mmcore = self.mmcore
         if not event.keep_shutter_open and self._autoshutter_was_set:
-            core.setAutoShutter(True)
+            if self._state.should_set_autoshutter(True):
+                try:
+                    mmcore.setAutoShutter(True)
+                    self._state.update_autoshutter(True)
+                except Exception as e:
+                    logger.warning("Failed to set autoshutter. %s", e)
         # FIXME: this may not be hitting as intended...
         # https://github.com/pymmcore-plus/pymmcore-plus/pull/353#issuecomment-2159176491
         if isinstance(event, SequencedEvent):
             if event.exposure_sequence:
-                core.stopExposureSequence(core.getCameraDevice())
+                mmcore.stopExposureSequence(mmcore.getCameraDevice())
             if event.x_sequence:
-                core.stopXYStageSequence(core.getXYStageDevice())
+                mmcore.stopXYStageSequence(mmcore.getXYStageDevice())
             if event.z_sequence:
-                core.stopStageSequence(core.getFocusDevice())
+                mmcore.stopStageSequence(mmcore.getFocusDevice())
             for dev, prop in event.property_sequences:
-                core.stopPropertySequence(dev, prop)
+                mmcore.stopPropertySequence(dev, prop)
 
     def teardown_sequence(self, sequence: MDASequence) -> None:
         """Perform any teardown required after the sequence has been executed."""
@@ -411,40 +660,40 @@ class MDAEngine(PMDAEngine):
     def _capture_state(self) -> StateDict:
         """Capture the current hardware state for later restoration."""
         state: StateDict = {}
-        if (core := self._mmcore_ref()) is None:
+        if (mmcore := self._mmcore_ref()) is None:
             return state
 
         try:
             # capture XY position
-            if core.getXYStageDevice():
-                state["xy_position"] = core.getXYPosition()
+            if mmcore.getXYStageDevice():
+                state["xy_position"] = mmcore.getXYPosition()
         except Exception as e:
             logger.warning("Failed to capture XY position: %s", e)
 
         try:
             # capture Z position
-            if core.getFocusDevice():
-                state["z_position"] = core.getZPosition()
+            if mmcore.getFocusDevice():
+                state["z_position"] = mmcore.getZPosition()
         except Exception as e:
             logger.warning("Failed to capture Z position: %s", e)
 
         try:
-            state["exposure"] = core.getExposure()
+            state["exposure"] = mmcore.getExposure()
         except Exception as e:
             logger.warning("Failed to capture exposure setting: %s", e)
 
         # capture config group states
         try:
             state_groups = state.setdefault("config_groups", {})
-            for group in core.getAvailableConfigGroups():
-                if current_config := core.getCurrentConfig(group):
+            for group in mmcore.getAvailableConfigGroups():
+                if current_config := mmcore.getCurrentConfig(group):
                     state_groups[group] = current_config
         except Exception as e:
             logger.warning("Failed to get available config groups: %s", e)
 
         # capture autoshutter state
         try:
-            state["autoshutter"] = core.getAutoShutter()
+            state["autoshutter"] = mmcore.getAutoShutter()
         except Exception as e:
             logger.warning("Failed to capture autoshutter state: %s", e)
 
@@ -452,7 +701,7 @@ class MDAEngine(PMDAEngine):
 
     def _restore_initial_state(self) -> None:
         """Restore the hardware state that was captured before the sequence."""
-        if not self._initial_state or (core := self._mmcore_ref()) is None:
+        if not self._initial_state or (mmcore := self._mmcore_ref()) is None:
             return
 
         # !!! We need to be careful about the order of Z and XY restoration:
@@ -469,9 +718,9 @@ class MDAEngine(PMDAEngine):
         target_z = self._initial_state.get("z_position")
         move_z_first = False
         focus_dir = FocusDirection.Unknown
-        if target_z is not None and (focus_device := core.getFocusDevice()):
-            focus_dir = core.getFocusDirection(focus_device)
-            cur_z = core.getZPosition()
+        if target_z is not None and (focus_device := mmcore.getFocusDevice()):
+            focus_dir = mmcore.getFocusDirection(focus_device)
+            cur_z = mmcore.getZPosition()
             # focus_dir TowardSample => increasing position brings obj. closer to sample
             if cur_z > target_z:
                 if focus_dir == FocusDirection.TowardSample:
@@ -486,8 +735,8 @@ class MDAEngine(PMDAEngine):
             def _move_z() -> None:
                 if target_z is not None:
                     try:
-                        if core.getFocusDevice():
-                            core.setZPosition(target_z)
+                        if mmcore.getFocusDevice():
+                            mmcore.setZPosition(target_z)
                     except Exception as e:
                         logger.warning("Failed to restore Z position: %s", e)
 
@@ -497,8 +746,8 @@ class MDAEngine(PMDAEngine):
             # restore XY position
             if "xy_position" in self._initial_state:
                 try:
-                    if core.getXYStageDevice():
-                        core.setXYPosition(*self._initial_state["xy_position"])
+                    if mmcore.getXYStageDevice():
+                        mmcore.setXYPosition(*self._initial_state["xy_position"])
                 except Exception as e:
                     logger.warning("Failed to restore XY position: %s", e)
 
@@ -508,14 +757,14 @@ class MDAEngine(PMDAEngine):
         # restore exposure
         if "exposure" in self._initial_state:
             try:
-                core.setExposure(self._initial_state["exposure"])
+                mmcore.setExposure(self._initial_state["exposure"])
             except Exception as e:
                 logger.warning("Failed to restore exposure setting: %s", e)
 
         # restore config group states
         for key, value in self._initial_state.get("config_groups", {}).items():
             try:
-                core.setConfig(key, value)
+                mmcore.setConfig(key, value)
             except Exception as e:
                 logger.warning(
                     "Failed to restore config group %s to %s: %s", key, value, e
@@ -524,11 +773,11 @@ class MDAEngine(PMDAEngine):
         # restore autoshutter state
         if "autoshutter" in self._initial_state:
             try:
-                core.setAutoShutter(self._initial_state["autoshutter"])
+                mmcore.setAutoShutter(self._initial_state["autoshutter"])
             except Exception as e:
                 logger.warning("Failed to restore autoshutter state: %s", e)
 
-        core.waitForSystem()
+        mmcore.waitForSystem()
         # clear the state after restoration
         self._initial_state = {}
 
@@ -537,40 +786,64 @@ class MDAEngine(PMDAEngine):
     def _load_sequenced_event(self, event: SequencedEvent) -> None:
         """Load a `SequencedEvent` into the core.
 
+        Uses caching to avoid redundant hardware sequence loading when sequences
+        are identical to the previously loaded event.
+
         `SequencedEvent` is a special pymmcore-plus specific subclass of
         `useq.MDAEvent`.
         """
-        core = self.mmcore
-        if event.exposure_sequence:
-            cam_device = core.getCameraDevice()
+        mmcore = self.mmcore
+
+        # Load exposure sequence if needed
+        if event.exposure_sequence and self._state.should_reload_exposure_sequence(
+            event.exposure_sequence
+        ):
+            cam_device = mmcore.getCameraDevice()
             with suppress(RuntimeError):
-                core.stopExposureSequence(cam_device)
-            core.loadExposureSequence(cam_device, event.exposure_sequence)
-        if event.x_sequence:  # y_sequence is implied and will be the same length
-            stage = core.getXYStageDevice()
+                mmcore.stopExposureSequence(cam_device)
+            mmcore.loadExposureSequence(cam_device, event.exposure_sequence)
+
+        # Load XY stage sequence if needed
+        if event.x_sequence and self._state.should_reload_xy_sequence(
+            event.x_sequence, event.y_sequence
+        ):
+            stage = mmcore.getXYStageDevice()
             with suppress(RuntimeError):
-                core.stopXYStageSequence(stage)
-            core.loadXYStageSequence(stage, event.x_sequence, event.y_sequence)
-        if event.z_sequence:
-            zstage = core.getFocusDevice()
+                mmcore.stopXYStageSequence(stage)
+            mmcore.loadXYStageSequence(stage, event.x_sequence, event.y_sequence)
+
+        # Load Z stage sequence if needed
+        if event.z_sequence and self._state.should_reload_z_sequence(event.z_sequence):
+            zstage = mmcore.getFocusDevice()
             with suppress(RuntimeError):
-                core.stopStageSequence(zstage)
-            core.loadStageSequence(zstage, event.z_sequence)
-        if event.slm_sequence:
-            slm = core.getSLMDevice()
+                mmcore.stopStageSequence(zstage)
+            mmcore.loadStageSequence(zstage, event.z_sequence)
+
+        # Load SLM sequence if needed
+        if event.slm_sequence and self._state.should_reload_slm_sequence(
+            event.slm_sequence
+        ):
+            slm = mmcore.getSLMDevice()
             with suppress(RuntimeError):
-                core.stopSLMSequence(slm)
-            core.loadSLMSequence(slm, event.slm_sequence)  # type: ignore[arg-type]
-        if event.property_sequences:
+                mmcore.stopSLMSequence(slm)
+            mmcore.loadSLMSequence(slm, event.slm_sequence)  # type: ignore[arg-type]
+
+        # Load property sequences if needed
+        if event.property_sequences and self._state.should_reload_property_sequences(
+            event.property_sequences
+        ):
             for (dev, prop), value_sequence in event.property_sequences.items():
                 with suppress(RuntimeError):
-                    core.stopPropertySequence(dev, prop)
-                core.loadPropertySequence(dev, prop, value_sequence)
+                    mmcore.stopPropertySequence(dev, prop)
+                mmcore.loadPropertySequence(dev, prop, value_sequence)
 
         # set all static properties, these won't change over the course of the sequence.
         if event.properties:
             for dev, prop, value in event.properties:
-                core.setProperty(dev, prop, value)
+                mmcore.setProperty(dev, prop, value)
+
+        # cache this event for future comparisons
+        self._state.cached_sequenced_event = event
 
     def setup_sequenced_event(self, event: SequencedEvent) -> None:
         """Setup hardware for a sequenced (triggered) event.
@@ -579,7 +852,7 @@ class MDAEngine(PMDAEngine):
         `setup_event`, which *is* part of the protocol), but it is made public
         in case a user wants to subclass this engine and override this method.
         """
-        core = self.mmcore
+        mmcore = self.mmcore
 
         self._load_sequenced_event(event)
 
@@ -594,37 +867,43 @@ class MDAEngine(PMDAEngine):
             self._set_event_slm_image(event)
 
         # preparing a Sequence while another is running is dangerous.
-        if core.isSequenceRunning():
+        if mmcore.isSequenceRunning():
             self._await_sequence_acquisition()
-        core.prepareSequenceAcquisition(core.getCameraDevice())
+        mmcore.prepareSequenceAcquisition(mmcore.getCameraDevice())
 
         # start sequences or set non-sequenced values
         if event.x_sequence:
-            core.startXYStageSequence(core.getXYStageDevice())
+            mmcore.startXYStageSequence(mmcore.getXYStageDevice())
         else:
             self._set_event_xy_position(event)
 
         if event.z_sequence:
-            core.startStageSequence(core.getFocusDevice())
+            mmcore.startStageSequence(mmcore.getFocusDevice())
         elif event.z_pos is not None:
             self._set_event_z(event)
 
         if event.exposure_sequence:
-            core.startExposureSequence(core.getCameraDevice())
+            mmcore.startExposureSequence(mmcore.getCameraDevice())
         elif event.exposure is not None:
-            core.setExposure(event.exposure)
+            # Check if we should set the exposure using unified state tracking
+            if self._state.should_set_exposure(event.exposure):
+                try:
+                    mmcore.setExposure(event.exposure)
+                    self._state.update_exposure(event.exposure)
+                except Exception as e:
+                    logger.warning("Failed to set exposure. %s", e)
 
         if event.property_sequences:
             for dev, prop in event.property_sequences:
-                core.startPropertySequence(dev, prop)
+                mmcore.startPropertySequence(dev, prop)
 
     def _await_sequence_acquisition(
         self, timeout: float = 5.0, poll_interval: float = 0.2
     ) -> None:
         tot = 0.0
-        core = self.mmcore
-        core.stopSequenceAcquisition()
-        while core.isSequenceRunning():
+        mmcore = self.mmcore
+        mmcore.stopSequenceAcquisition()
+        while mmcore.isSequenceRunning():
             time.sleep(poll_interval)
             tot += poll_interval
             if tot >= timeout:
@@ -655,24 +934,24 @@ class MDAEngine(PMDAEngine):
         if event.slm_image is not None:
             self._exec_event_slm_image(event.slm_image)
 
-        core = self.mmcore
+        mmcore = self.mmcore
         # Start sequence
         # Note that the overload of startSequenceAcquisition that takes a camera
         # label does NOT automatically initialize a circular buffer.  So if this call
         # is changed to accept the camera in the future, that should be kept in mind.
-        core.startSequenceAcquisition(
+        mmcore.startSequenceAcquisition(
             n_events,
             0,  # intervalMS  # TODO: add support for this
             True,  # stopOnOverflow
         )
         self.post_sequence_started(event)
 
-        n_channels = core.getNumberOfCameraChannels()
+        n_channels = mmcore.getNumberOfCameraChannels()
         count = 0
         iter_events = product(event.events, range(n_channels))
         # block until the sequence is done, popping images in the meantime
-        while core.isSequenceRunning():
-            if remaining := core.getRemainingImageCount():
+        while mmcore.isSequenceRunning():
+            if remaining := mmcore.getRemainingImageCount():
                 yield self._next_seqimg_payload(
                     *next(iter_events), remaining=remaining - 1, event_t0=event_t0_ms
                 )
@@ -680,10 +959,10 @@ class MDAEngine(PMDAEngine):
             else:
                 time.sleep(0.001)
 
-        if core.isBufferOverflowed():  # pragma: no cover
+        if mmcore.isBufferOverflowed():  # pragma: no cover
             raise MemoryError("Buffer overflowed")
 
-        while remaining := core.getRemainingImageCount():
+        while remaining := mmcore.getRemainingImageCount():
             yield self._next_seqimg_payload(
                 *next(iter_events), remaining=remaining - 1, event_t0=event_t0_ms
             )
@@ -709,8 +988,8 @@ class MDAEngine(PMDAEngine):
     ) -> PImagePayload:
         """Grab next image from the circular buffer and return it as an ImagePayload."""
         _slice = 0  # ?
-        core = self.mmcore
-        img, mm_meta = core.popNextImageAndMD(channel, _slice)
+        mmcore = self.mmcore
+        img, mm_meta = mmcore.popNextImageAndMD(channel, _slice)
         try:
             seq_time = float(mm_meta.get(Keyword.Elapsed_Time_ms))
         except Exception:
@@ -722,7 +1001,7 @@ class MDAEngine(PMDAEngine):
             # see: https://github.com/micro-manager/mmCoreAndDevices/pull/468
             camera_device = mm_meta.GetSingleTag("Camera").GetValue()
         except Exception:
-            camera_device = core.getPhysicalCameraDevice(channel)
+            camera_device = mmcore.getPhysicalCameraDevice(channel)
 
         # TODO: determine whether we want to try to populate changing property values
         # during the course of a triggered sequence
@@ -747,27 +1026,27 @@ class MDAEngine(PMDAEngine):
 
         Returns the change in ZPosition that occurred during the autofocus event.
         """
-        core = self.mmcore
+        mmcore = self.mmcore
         # switch off autofocus device if it is on
-        core.enableContinuousFocus(False)
+        mmcore.enableContinuousFocus(False)
 
         if action.autofocus_motor_offset is not None:
             # set the autofocus device offset
             # if name is given explicitly, use it, otherwise use setAutoFocusOffset
             # (see docs for setAutoFocusOffset for additional details)
             if name := getattr(action, "autofocus_device_name", None):
-                core.setPosition(name, action.autofocus_motor_offset)
+                mmcore.setPosition(name, action.autofocus_motor_offset)
             else:
-                core.setAutoFocusOffset(action.autofocus_motor_offset)
-            core.waitForSystem()
+                mmcore.setAutoFocusOffset(action.autofocus_motor_offset)
+            mmcore.waitForSystem()
 
         @retry(exceptions=RuntimeError, tries=action.max_retries, logger=logger.warning)
         def _perform_full_focus(previous_z: float) -> float:
-            core.fullFocus()
-            core.waitForSystem()
-            return core.getZPosition() - previous_z
+            mmcore.fullFocus()
+            mmcore.waitForSystem()
+            return mmcore.getZPosition() - previous_z
 
-        return _perform_full_focus(core.getZPosition())
+        return _perform_full_focus(mmcore.getZPosition())
 
     def _set_event_xy_position(self, event: MDAEvent) -> None:
         event_x, event_y = event.x_pos, event.y_pos
@@ -775,28 +1054,27 @@ class MDAEngine(PMDAEngine):
         if event_x is None and event_y is None:
             return
 
-        core = self.mmcore
+        mmcore = self.mmcore
         # skip if no XY stage device is found
-        if not core.getXYStageDevice():
+        if not mmcore.getXYStageDevice():
             logger.warning("No XY stage device found. Cannot set XY position.")
             return
 
-        # Retrieve the last commanded XY position.
-        last_x, last_y = core._last_xy_position.get(None) or (None, None)  # noqa: SLF001
-        if (
-            not self.force_set_xy_position
-            and (event_x is None or event_x == last_x)
-            and (event_y is None or event_y == last_y)
-        ):
-            return
-
+        # Handle partial coordinates by getting current position
         if event_x is None or event_y is None:
-            cur_x, cur_y = core.getXYPosition()
+            cur_x, cur_y = mmcore.getXYPosition()
             event_x = cur_x if event_x is None else event_x
             event_y = cur_y if event_y is None else event_y
 
+        # Check if we should set the position using unified state tracking
+        if not self._state.should_set_xy_position(
+            event_x, event_y, force=self.force_set_xy_position
+        ):
+            return
+
         try:
-            core.setXYPosition(event_x, event_y)
+            mmcore.setXYPosition(event_x, event_y)
+            self._state.update_xy_position(event_x, event_y)
         except Exception as e:
             logger.warning("Failed to set XY position. %s", e)
 
@@ -804,17 +1082,15 @@ class MDAEngine(PMDAEngine):
         if (ch := event.channel) is None:
             return
 
-        # comparison with _last_config is a fast/rough check ... which may miss subtle
-        # differences if device properties have been individually set in the meantime.
-        # could also compare to the system state, with:
-        # data = self.mmcore.getConfigData(ch.group, ch.config)
-        # if self.mmcore.getSystemStateCache().isConfigurationIncluded(data):
-        #     ...
-        if (ch.group, ch.config) != self.mmcore._last_config:  # noqa: SLF001
-            try:
-                self.mmcore.setConfig(ch.group, ch.config)
-            except Exception as e:
-                logger.warning("Failed to set channel. %s", e)
+        # Check if we should set the config using unified state tracking
+        if not self._state.should_set_config(ch.group, ch.config):
+            return
+
+        try:
+            self.mmcore.setConfig(ch.group, ch.config)
+            self._state.update_config(ch.group, ch.config)
+        except Exception as e:
+            logger.warning("Failed to set channel. %s", e)
 
     def _set_event_z(self, event: MDAEvent) -> None:
         # skip if no Z stage device is found
@@ -824,48 +1100,73 @@ class MDAEngine(PMDAEngine):
 
         p_idx = event.index.get("p", None)
         correction = self._z_correction.setdefault(p_idx, 0.0)
-        self.mmcore.setZPosition(cast("float", event.z_pos) + correction)
+        target_z = cast("float", event.z_pos) + correction
+
+        # Check if we should set the Z position using unified state tracking
+        if not self._state.should_set_z_position(target_z):
+            return
+
+        try:
+            self.mmcore.setZPosition(target_z)
+            self._state.update_z_position(target_z)
+        except Exception as e:
+            logger.warning("Failed to set Z position. %s", e)
 
     def _set_event_slm_image(self, event: MDAEvent) -> None:
         if not event.slm_image:
             return
-        core = self.mmcore
+        mmcore = self.mmcore
         try:
             # Get the SLM device
             if not (
-                slm_device := event.slm_image.device or core.getSLMDevice()
+                slm_device := event.slm_image.device or mmcore.getSLMDevice()
             ):  # pragma: no cover
                 raise ValueError("No SLM device found or specified.")
 
             # cast to numpy array
             slm_array = np.asarray(event.slm_image)
-            # if it's a single value, we can just set all pixels to that value
-            if slm_array.ndim == 0:
-                value = slm_array.item()
-                if isinstance(value, bool):
-                    dev_name = core.getDeviceName(slm_device)
-                    on_value = _SLM_DEVICES_PIXEL_ON_VALUES.get(dev_name, 1)
-                    value = on_value if value else 0
-                core.setSLMPixelsTo(slm_device, int(value))
-            elif slm_array.size == 3:
-                # if it's a 3-valued array, we assume it's RGB
-                r, g, b = slm_array.astype(int)
-                core.setSLMPixelsTo(slm_device, r, g, b)
-            elif slm_array.ndim in (2, 3):
-                # if it's a 2D/3D array, we assume it's an image
-                # where 3D is RGB with shape (h, w, 3)
-                if slm_array.ndim == 3 and slm_array.shape[2] != 3:
-                    raise ValueError(  # pragma: no cover
-                        "SLM image must be 2D or 3D with 3 channels (RGB)."
-                    )
-                # convert boolean on/off values to pixel values
-                if slm_array.dtype == bool:
-                    dev_name = core.getDeviceName(slm_device)
-                    on_value = _SLM_DEVICES_PIXEL_ON_VALUES.get(dev_name, 1)
-                    slm_array = np.where(slm_array, on_value, 0).astype(np.uint8)
-                core.setSLMImage(slm_device, slm_array)
+
+            # Check if we should set the SLM pixels using unified state tracking
+            if self._state.should_set_slm_pixels(slm_device, slm_array):
+                # if it's a single value, we can just set all pixels to that value
+                if slm_array.ndim == 0:
+                    value = slm_array.item()
+                    if isinstance(value, bool):
+                        dev_name = mmcore.getDeviceName(slm_device)
+                        on_value = _SLM_DEVICES_PIXEL_ON_VALUES.get(dev_name, 1)
+                        value = on_value if value else 0
+                    mmcore.setSLMPixelsTo(slm_device, int(value))
+                elif slm_array.size == 3:
+                    # if it's a 3-valued array, we assume it's RGB
+                    r, g, b = slm_array.astype(int)
+                    mmcore.setSLMPixelsTo(slm_device, r, g, b)
+                elif slm_array.ndim in (2, 3):
+                    # if it's a 2D/3D array, we assume it's an image
+                    # where 3D is RGB with shape (h, w, 3)
+                    if slm_array.ndim == 3 and slm_array.shape[2] != 3:
+                        raise ValueError(  # pragma: no cover
+                            "SLM image must be 2D or 3D with 3 channels (RGB)."
+                        )
+                    # convert boolean on/off values to pixel values
+                    if slm_array.dtype == bool:
+                        dev_name = mmcore.getDeviceName(slm_device)
+                        on_value = _SLM_DEVICES_PIXEL_ON_VALUES.get(dev_name, 1)
+                        slm_array = np.where(slm_array, on_value, 0).astype(np.uint8)
+                    mmcore.setSLMImage(slm_device, slm_array)
+
+                # Update state tracking
+                self._state.update_slm_pixels(slm_device, slm_array)
+
+            # Handle SLM exposure separately
             if event.slm_image.exposure:
-                core.setSLMExposure(slm_device, event.slm_image.exposure)
+                if self._state.should_set_slm_exposure(
+                    slm_device, event.slm_image.exposure
+                ):
+                    mmcore.setSLMExposure(slm_device, event.slm_image.exposure)
+                    self._state.update_slm_exposure(
+                        slm_device, event.slm_image.exposure
+                    )
+
         except Exception as e:
             logger.warning("Failed to set SLM Image: %s", e)
 
@@ -879,12 +1180,12 @@ class MDAEngine(PMDAEngine):
     def _update_config_device_props(self) -> None:
         # store devices/props that make up each config group for faster lookup
         self._config_device_props.clear()
-        core = self.mmcore
-        for grp in core.getAvailableConfigGroups():
-            for preset in core.getAvailableConfigs(grp):
+        mmcore = self.mmcore
+        for grp in mmcore.getAvailableConfigGroups():
+            for preset in mmcore.getAvailableConfigs(grp):
                 # ordered/unique list of (device, property) tuples for each group
                 self._config_device_props[grp] = tuple(
-                    {(i[0], i[1]): None for i in core.getConfigData(grp, preset)}
+                    {(i[0], i[1]): None for i in mmcore.getConfigData(grp, preset)}
                 )
 
     def _get_current_props(self, *groups: str) -> tuple[PropertyValue, ...]:
