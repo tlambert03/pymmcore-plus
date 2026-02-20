@@ -29,7 +29,7 @@ import pymmcore_plus._pymmcore as pymmcore
 from pymmcore_plus._discovery import find_micromanager
 from pymmcore_plus._logger import current_logfile, logger
 from pymmcore_plus._util import print_tabular_data
-from pymmcore_plus.mda import MDAEngine, MDARunner, PMDAEngine
+from pymmcore_plus.mda import MDAEngine, MDARunner, MDARunnerV2, PMDAEngine
 from pymmcore_plus.metadata.functions import summary_metadata
 
 from . import _device
@@ -58,6 +58,11 @@ if TYPE_CHECKING:
     from useq import MDAEvent
 
     from pymmcore_plus.mda._runner import SingleOutput
+    from pymmcore_plus.mda._v2 import (
+        ConsumerSpec,
+        OutputTarget,
+        RunPolicy,
+    )
     from pymmcore_plus.metadata.schema import SummaryMetaV1
 
     _T = TypeVar("_T")
@@ -287,6 +292,8 @@ class CMMCorePlus(pymmcore.CMMCore):
 
         self._mda_runner = MDARunner()
         self._mda_runner.set_engine(MDAEngine(self))
+        self._mda_runner_v2 = MDARunnerV2()
+        self._mda_runner_v2.set_engine(MDAEngine(self))
 
         self._objective_regex: Pattern = _OBJDEV_REGEX
         self._channel_group_regex: Pattern = _CHANNEL_REGEX
@@ -1639,6 +1646,11 @@ class CMMCorePlus(pymmcore.CMMCore):
         """
         return self._mda_runner
 
+    @property
+    def mda_v2(self) -> MDARunnerV2:
+        """Return the experimental v2 `MDARunner` instance."""
+        return self._mda_runner_v2
+
     def run_mda(
         self,
         events: Iterable[MDAEvent],
@@ -1685,6 +1697,35 @@ class CMMCorePlus(pymmcore.CMMCore):
                 "Cannot start an MDA while the previous MDA is still running."
             )
         th = Thread(target=self.mda.run, args=(events,), kwargs={"output": output})
+        th.start()
+        if block:
+            th.join()
+        return th
+
+    def run_mda_v2(
+        self,
+        events: Iterable[MDAEvent],
+        *,
+        consumers: Sequence[ConsumerSpec] = (),
+        output: OutputTarget | Sequence[OutputTarget] | None = None,
+        policy: RunPolicy | None = None,
+        block: bool = False,
+    ) -> Thread:
+        """Run events with the experimental v2 MDA runner on a new thread."""
+        if self.mda_v2.is_running():
+            raise ValueError(
+                "Cannot start an MDA while the previous MDA is still running."
+            )
+
+        th = Thread(
+            target=self.mda_v2.run,
+            args=(events,),
+            kwargs={
+                "consumers": consumers,
+                "output": output,
+                "policy": policy,
+            },
+        )
         th.start()
         if block:
             th.join()
