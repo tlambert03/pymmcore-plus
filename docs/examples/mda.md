@@ -1,13 +1,9 @@
 # Multidimensional Acquisition
 
-!!! note
+A key feature of `pymmcore-plus` is its [Multidimensional Acquisition (MDA)
+engine](../guides/mda_engine.md)
 
-    There is much more extensive documentation on the MDA acquisition engine
-    in the [Acquisition Engine guide](../guides/mda_engine.md)
-
-`pymmcore-plus` includes a basic Multi-dimensional Acquisition (`mda`) engine
-[`CMMCorePlus.run_mda`][pymmcore_plus.CMMCorePlus.run_mda] that accepts
-experimental sequences defined using
+The MDA engine is responsible for executing sequences of events defined using
 [useq-schema](https://github.com/pymmcore-plus/useq-schema).
 
 ```python linenums="1" title="run_mda.py"
@@ -36,20 +32,18 @@ experimental sequences defined using
 ## Cancelling or Pausing
 
 You can pause or cancel the mda with the
-[`CMMCorePlus.mda.toggle_pause`][pymmcore_plus.mda._runner.MDARunner.toggle_pause]
-or [`CMMCorePlus.mda.cancel`][pymmcore_plus.mda._runner.MDARunner.cancel]
+[`CMMCorePlus.mda.set_paused`][pymmcore_plus.mda.MDARunner.set_paused]
+or [`CMMCorePlus.mda.cancel`][pymmcore_plus.mda.MDARunner.cancel]
 methods.
 
-## Registering a new MDA Engine
+## Customizing the MDA Engine
 
 By default the built-in [`MDAEngine`][pymmcore_plus.mda.MDAEngine] will be used
 to run the MDA. However, you can create a custom acquisition engine and register
 it use
 [`CMMCorePlus.register_mda_engine`][pymmcore_plus.CMMCorePlus.register_mda_engine].
-
-Your engine must conform to the engine protocol defined by
-[`pymmcore_plus.mda.PMDAEngine`][]. To ensure that your engine conforms you can
-inherit from the protocol.
+See the [Custom Acquisition Engines](../guides/custom_engine.md) for more
+details on how to do this.
 
 You can be alerted to the the registering of a new engine with the
 [`core.events.mdaEngineRegistered`][pymmcore_plus.core.events._protocol.PCoreSignaler.mdaEngineRegistered]

@@ -11,31 +11,41 @@ edit_uri = "edit/main/docs/"
 nav = [
   { Home = "https://pymmcore-plus.github.io/pymmcore-docs/" },
   { "pymmcore-plus" = [
-    "index.md",
-    "install.md",
-    { Guides = [
+    { "Getting Started" = [
+      "index.md",
+      "install.md",
+      "examples/mda.md",
+    ] },
+    { "How-to Guides" = [
+      "guides/configuration.md",
+      "guides/device.md",
+      "guides/constants.md",
       "guides/events.md",
       "guides/mda_engine.md",
-      "guides/custom_engine.md",
       "guides/event_driven_acquisition.md",
+      "guides/custom_engine.md",
       "guides/logging.md",
-      "guides/unicore.md",
       "guides/ipython_completion.md",
+      "troubleshooting.md",
+    ] },
+    { Concepts = [
+      "guides/unicore.md",
     ] },
     { Examples = [
-      "examples/mda.md",
       "examples/integration-with-qt.md",
       "examples/context-set.md",
-      "examples/napari-micromanager.md",
       "examples/following_changes_in_core.md",
       "examples/pycro-manager-api.md",
     ] },
-    "metadata.md",
-    "env_var.md",
-    "cli.md",
-    "troubleshooting.md",
-    "profiling.md",
-    "contributing.md",
+    { Reference = [
+      "cli.md",
+      "env_var.md",
+      "metadata.md",
+    ] },
+    { Development = [
+      "profiling.md",
+      "contributing.md",
+    ] },
     { "API Reference" = [
       { pymmcore_plus = [
         "api/pymmcore_plus/index.md",

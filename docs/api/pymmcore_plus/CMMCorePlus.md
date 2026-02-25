@@ -20,7 +20,7 @@ method is implemented in `CMMCorePlus` or not).
 :prohibited:  *This method is deprecated.*  
 </small>
 
-::: pymmcore_plus.core._mmcore_plus.CMMCorePlus
+::: pymmcore_plus.CMMCorePlus
     options:
         summary: true
         inherited_members: true
