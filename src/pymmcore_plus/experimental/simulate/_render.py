@@ -49,9 +49,6 @@ class RenderConfig:
 
     Parameters
     ----------
-    photon_flux : float
-        Base photon flux in photons/pixel/second for intensity=255 objects.
-        Default 1000. Combined with exposure time to determine photon count.
     shot_noise : bool
         Whether to apply Poisson (shot) noise. Default True.
     defocus_scale : float

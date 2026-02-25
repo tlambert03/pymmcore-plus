@@ -29,18 +29,28 @@ class Device:
     This is the type of object that is returned by
     [`pymmcore_plus.CMMCorePlus.getDeviceObject`][]
 
+
     Parameters
     ----------
     device_label : str
-        Device label assigned to this device.
-    mmcore : CMMCorePlus
-        CMMCorePlus instance that owns this device.
-    device_type : DeviceType or Device subclass, optional
+        User-defined device label assigned to this device.
+    mmcore : CMMCorePlus | None
+        CMMCorePlus instance that owns this device. If `None`, the singleton instance
+        will be used.
+    adapter_name: str
+        The name of the device adapter module.
+    device_name: str
+        The name of the device (as named by the device adapter).
+    type : DeviceType or Device subclass, optional
         The type of device to create. If not specified, the type will be inferred
         from the core if the device is already loaded. If the device is not loaded,
         an error will be raised. This parameter is mainly intended for usage when
         calling from `CMMCorePlus.getDeviceObject()`.  Otherwise, prefer using
         `[SpecificDeviceSubclass].create()`.
+    description : str, optional
+        A human-readable description of the device. Mainly intended for usage when
+        calling from `CMMCorePlus.getDeviceObject()`.  Otherwise, this will be inferred
+        from the core if the device is already loaded.
 
     Examples
     --------
@@ -69,6 +79,27 @@ class Device:
         mmcore: CMMCorePlus,
         device_type: type[Device] | DeviceType = DeviceType.Any,
     ) -> Self:
+        """Create a Device object for the given device_label.
+
+        A simplified factory method that creates the appropriate Device subclass based
+        on the type of the device as reported by the core, or based on the provided
+        `device_type`.  For type-safety (so that your IDE knows what type of device
+        subclass you are working with), prefer using passing the `device_type` argument
+        with the [DeviceType][pymmcore_plus.DeviceType] enum value corresponding to the
+        type of device you expect.
+
+        Parameters
+        ----------
+        device_label : str
+            The label of the device to create a Device object for.
+        mmcore : CMMCorePlus
+            The CMMCorePlus instance to which the device is bound.
+        device_type : type[Device] | DeviceType, optional
+            The type of device to create. If not specified, the type will be inferred
+            from the core. This parameter is mainly intended for usage when calling from
+            `CMMCorePlus.getDeviceObject()`.  Otherwise, prefer using
+            `[SpecificDeviceSubclass].create()`.
+        """
         if device_type in {DeviceType.Any, DeviceType.Unknown}:
             try:
                 sub_cls = cls.get_subclass(device_label, mmcore)

@@ -41,7 +41,7 @@ ConfigGroupB:
 ## `pymmcore-plus` Objects
 
 MMCore and pymmcore's
-[configuration](https://valelab4.ucsf.edu/~MM/doc/MMCore/html/class_configuration.html)
+[configuration](https://micro-manager.org/apidoc/MMCore/latest/class_configuration.html)
 object implements a basic mutable mapping interface, but with custom method
 names like `addSetting`, `getSetting`, and `deleteSetting` methods).
 
@@ -57,11 +57,3 @@ which is a [`MutableMapping`][collections.abc.MutableMapping] where the keys are
 [Configuration
 Preset](https://micro-manager.org/Micro-Manager_Configuration_Guide#configuration-presets)
 names and the values are `Configuration` objects.
-
-::: pymmcore_plus.Configuration
-    options:
-        heading_level: 3
-
-::: pymmcore_plus.ConfigGroup
-    options:
-        heading_level: 3

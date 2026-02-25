@@ -1,0 +1,162 @@
+# Shared config is managed by pymmcore-docs-theme — see ecosystem.toml.
+
+[project]
+site_name = "pymmcore-plus"
+site_url = "https://pymmcore-plus.github.io/pymmcore-plus/"
+site_description = "Pure python extensions of the C++ micro-manager core"
+repo_url = "https://github.com/pymmcore-plus/pymmcore-plus"
+repo_name = "pymmcore-plus/pymmcore-plus"
+edit_uri = "edit/main/docs/"
+
+nav = [
+  { Home = "https://pymmcore-plus.github.io/pymmcore-docs/" },
+  { "pymmcore-plus" = [
+    "index.md",
+    "install.md",
+    { Guides = [
+      "guides/events.md",
+      "guides/mda_engine.md",
+      "guides/custom_engine.md",
+      "guides/event_driven_acquisition.md",
+      "guides/logging.md",
+      "guides/unicore.md",
+      "guides/ipython_completion.md",
+    ] },
+    { Examples = [
+      "examples/mda.md",
+      "examples/integration-with-qt.md",
+      "examples/context-set.md",
+      "examples/napari-micromanager.md",
+      "examples/following_changes_in_core.md",
+      "examples/pycro-manager-api.md",
+    ] },
+    "metadata.md",
+    "env_var.md",
+    "cli.md",
+    "troubleshooting.md",
+    "profiling.md",
+    "contributing.md",
+    { "API Reference" = [
+      { pymmcore_plus = [
+        "api/pymmcore_plus/index.md",
+        { CMMCorePlus = "api/pymmcore_plus/CMMCorePlus.md" },
+        { core = [
+          "api/pymmcore_plus/core/index.md",
+          { events = "api/pymmcore_plus/core/events/index.md" },
+        ] },
+        { experimental = [
+          "api/pymmcore_plus/experimental/index.md",
+          { simulate = "api/pymmcore_plus/experimental/simulate/index.md" },
+          { unicore = "api/pymmcore_plus/experimental/unicore/index.md" },
+        ] },
+        { install = "api/pymmcore_plus/install.md" },
+        { mda = [
+          "api/pymmcore_plus/mda/index.md",
+          { events = "api/pymmcore_plus/mda/events/index.md" },
+          { handlers = "api/pymmcore_plus/mda/handlers/index.md" },
+        ] },
+        { metadata = [
+          "api/pymmcore_plus/metadata/index.md",
+          { functions = "api/pymmcore_plus/metadata/functions.md" },
+          { schema = "api/pymmcore_plus/metadata/schema.md" },
+          { serialize = "api/pymmcore_plus/metadata/serialize.md" },
+        ] },
+        { mocks = "api/pymmcore_plus/mocks.md" },
+        { model = "api/pymmcore_plus/model/index.md" },
+        { seq_tester = "api/pymmcore_plus/seq_tester.md" },
+      ] },
+    ] },
+  ] },
+  { "useq-schema" = "https://pymmcore-plus.github.io/useq-schema/" },
+  { "pymmcore-widgets" = "https://pymmcore-plus.github.io/pymmcore-widgets/" },
+  { "ome-writers" = "https://pymmcore-plus.github.io/ome-writers/" },
+  { "pymmcore-gui" = "https://pymmcore-plus.github.io/pymmcore-gui/" },
+]
+
+extra_css = ["stylesheets/extra.css"]
+
+[project.theme]
+icon.logo = "lucide/microscope"
+features = [
+  "content.code.annotate",
+  "content.code.copy",
+  "content.code.select",
+  "content.tabs.link",
+  "content.tooltips",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.tabs",
+  "toc.follow",
+  "search.highlight",
+]
+font.text = "Inter"
+font.code = "Fira Code"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "teal"
+accent = "cyan"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "teal"
+accent = "cyan"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions.toc]
+permalink = "#"
+
+[project.markdown_extensions.tables]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.highlight]
+[project.markdown_extensions.pymdownx.inlinehilite]
+[project.markdown_extensions.pymdownx.snippets]
+
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true
+
+[project.markdown_extensions.pymdownx.emoji]
+emoji_index = "zensical.extensions.emoji.twemoji"
+emoji_generator = "zensical.extensions.emoji.to_svg"
+
+[project.markdown_extensions.pymdownx.tilde]
+
+[project.plugins.mkdocstrings.handlers.python]
+inventories = [
+  "https://docs.python.org/3/objects.inv",
+  "https://numpy.org/doc/stable/objects.inv",
+  "https://pymmcore-plus.github.io/useq-schema/objects.inv",
+]
+paths = ["src"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+preload_modules = ["pymmcore"]
+extensions = ["docs/_griffe_ext.py"]
+docstring_style = "numpy"
+docstring_section_style = "table"
+show_source = false
+show_bases = false
+show_root_heading = true
+show_root_toc_entry = false
+show_symbol_type_toc = true
+show_symbol_type_heading = true
+merge_init_into_class = true
+modernize_annotations = true
+separate_signature = true
+show_signature_annotations = true
+show_if_no_docstring = true
+filters = ["^[^_]"]
+line_length = 50

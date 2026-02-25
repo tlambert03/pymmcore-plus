@@ -20,17 +20,3 @@ device label and a device property name, and modify that specific property (e.g.
 [`isPropertyReadOnly`][pymmcore.CMMCore.isPropertyReadOnly], etc...).  Here, the
 [`DeviceProperty`][pymmcore_plus.DeviceProperty] class acts as a "view" onto a specific
 device property, with an object-oriented interface to these methods.
-
-::: pymmcore_plus.DeviceAdapter
-    options:
-        show_source: true
-
-::: pymmcore_plus.Device
-    options:
-        show_source: true
-
-::: pymmcore_plus.DeviceProperty
-    options:
-        show_source: true
-
-::: pymmcore_plus.core._property.InfoDict

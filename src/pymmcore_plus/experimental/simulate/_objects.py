@@ -616,7 +616,7 @@ class Bitmap(SampleObject):
         Top-left corner (x, y) in world units.
     data : np.ndarray | Image.Image | str
         Image data as numpy array, PIL Image, or path to image file.
-    scale : float
+    bitmap_scale : float
         World units per bitmap pixel. Default 1.0 (1 pixel = 1 world unit).
     """
 
