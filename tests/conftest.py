@@ -9,6 +9,7 @@ os.environ["PYTEST_RUNNING"] = "1"
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from hypothesis import HealthCheck, settings
 
 import pymmcore_plus
 from pymmcore_plus._logger import logger
@@ -17,6 +18,13 @@ from pymmcore_plus.mda.events import MDASignaler
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+# --- Hypothesis profiles ---
+_suppress = [HealthCheck.function_scoped_fixture]
+settings.register_profile("dev", max_examples=20, suppress_health_check=_suppress)
+settings.register_profile("ci", max_examples=50, suppress_health_check=_suppress)
+settings.register_profile("full", max_examples=200, suppress_health_check=_suppress)
+settings.load_profile(os.getenv("HYPOTHESIS_PROFILE", "ci"))
 
 try:
     from pymmcore_plus.core.events import QCoreSignaler
@@ -42,6 +50,21 @@ def core(
     else:
         assert isinstance(core._events, QCoreSignaler)
         assert isinstance(core.mda._signals, QMDASignaler)
+    if not core.getDeviceAdapterSearchPaths():
+        pytest.fail("To run tests, please install MM with `mmcore install`")
+    core.loadSystemConfiguration()
+    yield core
+    core.__del__()
+
+
+@pytest.fixture
+def psygnal_core(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[pymmcore_plus.CMMCorePlus]:
+    """CMMCorePlus with psygnal backend only (no Qt parametrize)."""
+    monkeypatch.setenv("PYMM_SIGNALS_BACKEND", "psygnal")
+    core = pymmcore_plus.CMMCorePlus()
+    core.mda.engine.use_hardware_sequencing = False
     if not core.getDeviceAdapterSearchPaths():
         pytest.fail("To run tests, please install MM with `mmcore install`")
     core.loadSystemConfiguration()
