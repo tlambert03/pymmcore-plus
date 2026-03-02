@@ -151,3 +151,4 @@ example.zarr
 uv.lock
 docs/api/pymmcore_plus/*
 !docs/api/pymmcore_plus/CMMCorePlus.md
+example.ome.zarr
