@@ -4,6 +4,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Any, TypedDict
 
 import pymmcore_plus
+from pymmcore_plus import core_io
 from pymmcore_plus._util import timestamp
 from pymmcore_plus.core._constants import DeviceType, PixelFormat
 
@@ -11,6 +12,12 @@ if TYPE_CHECKING:
     import useq
     from typing_extensions import Unpack
 
+    from mmcore_schema.state import (
+        ConfigGroup as _StateConfigGroup,
+        DeviceInfo as _StateDeviceInfo,
+        PixelSizePreset as _StatePixelSizePreset,
+        PropertyInfo as _StatePropertyInfo,
+    )
     from pymmcore_plus.core import CMMCorePlus
 
     from .schema import (
@@ -54,15 +61,20 @@ def summary_metadata(
     See [pymmcore_plus.metadata.SummaryMetaV1][] for a description of the
     dictionary format.
     """
+    state = core_io.read_system_state(core, cached=cached)
     summary: SummaryMetaV1 = {
         "format": "summary-dict",
         "version": "1.0",
-        "devices": devices_info(core, cached=cached),
+        "devices": tuple(_convert_device(d, core) for d in state.devices),
         "system_info": system_info(core),
         "image_infos": image_infos(core),
         "position": position(core),
-        "config_groups": config_groups(core),
-        "pixel_size_configs": pixel_size_configs(core),
+        "config_groups": tuple(
+            _convert_config_group(g) for g in state.config_groups
+        ),
+        "pixel_size_configs": tuple(
+            _convert_pixel_size_preset(p) for p in state.pixel_size_configs
+        ),
     }
     if include_time:
         summary["datetime"] = timestamp()
@@ -104,34 +116,8 @@ def frame_metadata(
 
 def device_info(core: CMMCorePlus, *, label: str, cached: bool = True) -> DeviceInfo:
     """Return information about a specific device label."""
-    devtype = core.getDeviceType(label)
-    info: DeviceInfo = {
-        "label": label,
-        "library": core.getDeviceLibrary(label),
-        "name": core.getDeviceName(label),
-        "type": devtype.name,
-        "description": core.getDeviceDescription(label),
-        "properties": properties(core, device=label, cached=cached),
-    }
-    if parent := core.getParentLabel(label):
-        info["parent_label"] = parent
-    with suppress(RuntimeError):
-        if devtype == DeviceType.Hub:
-            info["child_names"] = core.getInstalledDevices(label)
-        if devtype == DeviceType.State:
-            info["labels"] = core.getStateLabels(label)
-        elif devtype == DeviceType.Stage:
-            info["is_sequenceable"] = core.isStageSequenceable(label)
-            info["is_continuous_focus_drive"] = core.isContinuousFocusDrive(label)
-            with suppress(RuntimeError):
-                info["focus_direction"] = core.getFocusDirection(label).name  # type: ignore[typeddict-item]
-        elif devtype == DeviceType.XYStage:
-            info["is_sequenceable"] = core.isXYStageSequenceable(label)
-        elif devtype == DeviceType.Camera:
-            info["is_sequenceable"] = core.isExposureSequenceable(label)
-        elif devtype == DeviceType.SLM:
-            info["is_sequenceable"] = core.getSLMSequenceMaxLength(label) > 0
-    return info
+    state_dev = core_io.read_device_info(core, label, cached=cached)
+    return _convert_device(state_dev, core)
 
 
 def system_info(core: CMMCorePlus) -> SystemInfo:
@@ -257,59 +243,27 @@ def position(core: CMMCorePlus, all_stages: bool = False) -> Position:
 
 def config_group(core: CMMCorePlus, *, group_name: str) -> ConfigGroup:
     """Return a dictionary of configuration presets for a specific group."""
-    return {
-        "name": group_name,
-        "presets": tuple(
-            {
-                "name": preset_name,
-                "settings": tuple(
-                    {"dev": dev, "prop": prop, "val": val}
-                    for dev, prop, val in core.getConfigData(group_name, preset_name)
-                ),
-            }
-            for preset_name in core.getAvailableConfigs(group_name)
-        ),
-    }
+    return _convert_config_group(core_io.read_config_group(core, group_name))
 
 
 def config_groups(core: CMMCorePlus) -> tuple[ConfigGroup, ...]:
     """Return all configuration groups."""
     return tuple(
-        config_group(core, group_name=group_name)
-        for group_name in core.getAvailableConfigGroups()
+        _convert_config_group(g) for g in core_io.read_config_groups(core)
     )
 
 
 def pixel_size_config(core: CMMCorePlus, *, config_name: str) -> PixelSizeConfigPreset:
-    """Return info for a specific pixel size preset for a specific."""
-    info: PixelSizeConfigPreset = {
-        "name": config_name,
-        "pixel_size_um": core.getPixelSizeUmByID(config_name),
-        "settings": tuple(
-            {"dev": dev, "prop": prop, "val": val}
-            for dev, prop, val in core.getPixelSizeConfigData(config_name)
-        ),
-    }
-    affine = core.getPixelSizeAffineByID(config_name)
-    if affine != (1.0, 0.0, 0.0, 0.0, 1.0, 0.0):
-        info["pixel_size_affine"] = affine
-    # added in v11.5
-    if hasattr(core, "getPixelSizedxdz") and (px := core.getPixelSizedxdz(config_name)):
-        info["pixel_size_dxdz"] = px
-    if hasattr(core, "getPixelSizedydz") and (px := core.getPixelSizedydz(config_name)):
-        info["pixel_size_dydz"] = px
-    if hasattr(core, "getPixelSizeOptimalZUm") and (
-        z := core.getPixelSizeOptimalZUm(config_name)
-    ):
-        info["pixel_size_optimal_z_um"] = z
-    return info
+    """Return info for a specific pixel size preset."""
+    return _convert_pixel_size_preset(
+        core_io.read_pixel_size_preset(core, config_name)
+    )
 
 
 def devices_info(core: CMMCorePlus, cached: bool = True) -> tuple[DeviceInfo, ...]:
     """Return a dictionary of device information for all loaded devices."""
-    return tuple(
-        device_info(core, label=lbl, cached=cached) for lbl in core.getLoadedDevices()
-    )
+    state_devs = core_io.read_devices(core, cached=cached)
+    return tuple(_convert_device(d, core) for d in state_devs)
 
 
 def property_info(
@@ -320,47 +274,128 @@ def property_info(
     cached: bool = True,
 ) -> PropertyInfo:
     """Return information on a specific device property."""
-    try:
-        if cached:
-            value = core.getPropertyFromCache(device, prop)
-        else:  # pragma: no cover
-            value = core.getProperty(device, prop)
-    except Exception:  # pragma: no cover
-        value = None
-    info: PropertyInfo = {
-        "name": prop,
-        "value": value,
-        "data_type": core.getPropertyType(device, prop).__repr__(),
-        "allowed_values": core.getAllowedPropertyValues(device, prop),
-        "is_read_only": core.isPropertyReadOnly(device, prop),
-    }
-    if core.isPropertyPreInit(device, prop):
-        info["is_pre_init"] = True
-    if core.isPropertySequenceable(device, prop):
-        info["sequenceable"] = True
-        info["sequence_max_length"] = core.getPropertySequenceMaxLength(device, prop)
-    if core.hasPropertyLimits(device, prop):
-        info["limits"] = (
-            core.getPropertyLowerLimit(device, prop),
-            core.getPropertyUpperLimit(device, prop),
-        )
-    return info
+    state_prop = core_io.read_property_info(core, device, prop, cached=cached)
+    return _convert_property(state_prop, core, device)
 
 
 def properties(
     core: CMMCorePlus, device: str, *, cached: bool = True
 ) -> tuple[PropertyInfo, ...]:
     """Return a dictionary of device properties values for all loaded devices."""
-    # this actually appears to be faster than getSystemStateCache
-    return tuple(
-        property_info(core, device, prop, cached=cached)
-        for prop in core.getDevicePropertyNames(device)
-    )
+    state_props = core_io.read_properties(core, device, cached=cached)
+    return tuple(_convert_property(p, core, device) for p in state_props)
 
 
 def pixel_size_configs(core: CMMCorePlus) -> tuple[PixelSizeConfigPreset, ...]:
     """Return a dictionary of pixel size configurations."""
     return tuple(
-        pixel_size_config(core, config_name=config_name)
-        for config_name in core.getAvailablePixelSizeConfigs()
+        _convert_pixel_size_preset(p)
+        for p in core_io.read_pixel_size_presets(core)
     )
+
+
+# --------------- state model → metadata TypedDict conversion ---------------
+
+_IDENTITY_AFFINE = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+
+
+def _convert_property(
+    prop: _StatePropertyInfo,
+    core: CMMCorePlus,
+    device: str,
+) -> PropertyInfo:
+    """Convert mmcore_schema.state.PropertyInfo to metadata PropertyInfo."""
+    info: PropertyInfo = {
+        "name": prop.name,
+        "value": prop.value or None,
+        "data_type": repr(prop.data_type),
+        "allowed_values": prop.allowed_values,
+        "is_read_only": prop.is_read_only,
+    }
+    if prop.is_pre_init:
+        info["is_pre_init"] = True
+    if prop.limits is not None:
+        info["limits"] = prop.limits
+    if core.isPropertySequenceable(device, prop.name):
+        info["sequenceable"] = True
+        info["sequence_max_length"] = core.getPropertySequenceMaxLength(
+            device, prop.name
+        )
+    return info
+
+
+def _convert_device(
+    dev: _StateDeviceInfo,
+    core: CMMCorePlus,
+) -> DeviceInfo:
+    """Convert mmcore_schema.state.DeviceInfo to metadata DeviceInfo."""
+    info: DeviceInfo = {
+        "label": dev.label,
+        "library": dev.library,
+        "name": dev.name,
+        "type": dev.type.name,
+        "description": dev.description,
+        "properties": tuple(
+            _convert_property(p, core, dev.label) for p in dev.properties
+        ),
+    }
+    if dev.parent_label:
+        info["parent_label"] = dev.parent_label
+    with suppress(RuntimeError):
+        if dev.type == DeviceType.Hub:
+            info["child_names"] = dev.child_names
+        if dev.type == DeviceType.State:
+            info["labels"] = dev.state_labels
+        elif dev.type == DeviceType.Stage:
+            info["is_sequenceable"] = core.isStageSequenceable(dev.label)
+            info["is_continuous_focus_drive"] = core.isContinuousFocusDrive(
+                dev.label
+            )
+            info["focus_direction"] = dev.focus_direction.name  # type: ignore[typeddict-item]
+        elif dev.type == DeviceType.XYStage:
+            info["is_sequenceable"] = core.isXYStageSequenceable(dev.label)
+        elif dev.type == DeviceType.Camera:
+            info["is_sequenceable"] = core.isExposureSequenceable(dev.label)
+        elif dev.type == DeviceType.SLM:
+            info["is_sequenceable"] = core.getSLMSequenceMaxLength(dev.label) > 0
+    return info
+
+
+def _convert_config_group(group: _StateConfigGroup) -> ConfigGroup:
+    """Convert mmcore_schema.state.ConfigGroup to metadata ConfigGroup."""
+    return {
+        "name": group.name,
+        "presets": tuple(
+            {
+                "name": preset.name,
+                "settings": tuple(
+                    {"dev": s.device, "prop": s.property, "val": s.value}
+                    for s in preset.settings
+                ),
+            }
+            for preset in group.presets.values()
+        ),
+    }
+
+
+def _convert_pixel_size_preset(
+    preset: _StatePixelSizePreset,
+) -> PixelSizeConfigPreset:
+    """Convert mmcore_schema.state.PixelSizePreset to metadata TypedDict."""
+    info: PixelSizeConfigPreset = {
+        "name": preset.name,
+        "pixel_size_um": preset.pixel_size_um,
+        "settings": tuple(
+            {"dev": s.device, "prop": s.property, "val": s.value}
+            for s in preset.settings
+        ),
+    }
+    if tuple(preset.affine) != _IDENTITY_AFFINE:
+        info["pixel_size_affine"] = tuple(preset.affine)  # type: ignore[assignment]
+    if preset.dxdz:
+        info["pixel_size_dxdz"] = preset.dxdz
+    if preset.dydz:
+        info["pixel_size_dydz"] = preset.dydz
+    if preset.optimal_z_um:
+        info["pixel_size_optimal_z_um"] = preset.optimal_z_um
+    return info
