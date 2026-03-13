@@ -36,6 +36,7 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
     "platformdirs >=3.0.0",
+    "pyyaml >=6.0.2",
     "numpy >=2.1.0; python_version >= '3.13'",
     "numpy >=1.26.0; python_version >= '3.12'",
     "numpy >=1.25.2",
@@ -115,6 +116,7 @@ Documentation = "https://pymmcore-plus.github.io/pymmcore-plus"
 
 [project.scripts]
 mmcore = "pymmcore_plus._cli:main"
+mmconfig = "mmcore_schema.__main__:main"
 
 # https://hatch.pypa.io/latest/config/metadata/
 [tool.hatch.version]
@@ -166,6 +168,7 @@ ignore = [
 "examples/*.py" = ["D"]
 "_cli.py" = ["B008"]
 "docs/*.py" = ["A", "D"]
+"src/mmcore_schema/*.py" = ["D105"]
 
 # https://docs.astral.sh/ruff/formatter/
 [tool.ruff.format]
