@@ -14,8 +14,14 @@ if TYPE_CHECKING:
 
     from mmcore_schema.state import (
         ConfigGroup as _StateConfigGroup,
+    )
+    from mmcore_schema.state import (
         DeviceInfo as _StateDeviceInfo,
+    )
+    from mmcore_schema.state import (
         PixelSizePreset as _StatePixelSizePreset,
+    )
+    from mmcore_schema.state import (
         PropertyInfo as _StatePropertyInfo,
     )
     from pymmcore_plus.core import CMMCorePlus
@@ -69,9 +75,7 @@ def summary_metadata(
         "system_info": system_info(core),
         "image_infos": image_infos(core),
         "position": position(core),
-        "config_groups": tuple(
-            _convert_config_group(g) for g in state.config_groups
-        ),
+        "config_groups": tuple(_convert_config_group(g) for g in state.config_groups),
         "pixel_size_configs": tuple(
             _convert_pixel_size_preset(p) for p in state.pixel_size_configs
         ),
@@ -248,16 +252,12 @@ def config_group(core: CMMCorePlus, *, group_name: str) -> ConfigGroup:
 
 def config_groups(core: CMMCorePlus) -> tuple[ConfigGroup, ...]:
     """Return all configuration groups."""
-    return tuple(
-        _convert_config_group(g) for g in core_io.read_config_groups(core)
-    )
+    return tuple(_convert_config_group(g) for g in core_io.read_config_groups(core))
 
 
 def pixel_size_config(core: CMMCorePlus, *, config_name: str) -> PixelSizeConfigPreset:
     """Return info for a specific pixel size preset."""
-    return _convert_pixel_size_preset(
-        core_io.read_pixel_size_preset(core, config_name)
-    )
+    return _convert_pixel_size_preset(core_io.read_pixel_size_preset(core, config_name))
 
 
 def devices_info(core: CMMCorePlus, cached: bool = True) -> tuple[DeviceInfo, ...]:
@@ -289,8 +289,7 @@ def properties(
 def pixel_size_configs(core: CMMCorePlus) -> tuple[PixelSizeConfigPreset, ...]:
     """Return a dictionary of pixel size configurations."""
     return tuple(
-        _convert_pixel_size_preset(p)
-        for p in core_io.read_pixel_size_presets(core)
+        _convert_pixel_size_preset(p) for p in core_io.read_pixel_size_presets(core)
     )
 
 
@@ -348,9 +347,7 @@ def _convert_device(
             info["labels"] = dev.state_labels
         elif dev.type == DeviceType.Stage:
             info["is_sequenceable"] = core.isStageSequenceable(dev.label)
-            info["is_continuous_focus_drive"] = core.isContinuousFocusDrive(
-                dev.label
-            )
+            info["is_continuous_focus_drive"] = core.isContinuousFocusDrive(dev.label)
             info["focus_direction"] = dev.focus_direction.name  # type: ignore[typeddict-item]
         elif dev.type == DeviceType.XYStage:
             info["is_sequenceable"] = core.isXYStageSequenceable(dev.label)

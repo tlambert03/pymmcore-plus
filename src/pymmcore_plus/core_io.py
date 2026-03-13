@@ -85,9 +85,7 @@ def read_properties(
     if device_type is None:
         device_type = DeviceType(int(core.getDeviceType(device)))
     return tuple(
-        read_property_info(
-            core, device, prop, cached=cached, device_type=device_type
-        )
+        read_property_info(core, device, prop, cached=cached, device_type=device_type)
         for prop in core.getDevicePropertyNames(device)
     )
 
@@ -168,9 +166,7 @@ def read_config_group(
                 info = read_property_info(core, device, prop)
                 settings.append(dataclasses.replace(info, value=val))
             else:
-                settings.append(
-                    PropertyInfo(name=prop, device_label=device, value=val)
-                )
+                settings.append(PropertyInfo(name=prop, device_label=device, value=val))
         presets[preset_name] = ConfigPreset(name=preset_name, settings=settings)
     return ConfigGroup(name=group_name, presets=presets)
 

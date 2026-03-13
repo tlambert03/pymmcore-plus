@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 import pymmcore_plus
-from mmcore_schema import DeviceType, FocusDirection, PropertySetting, PropertyType
+from mmcore_schema import DeviceType, FocusDirection, PropertyType
 from mmcore_schema.state import (
     ConfigGroup,
     ConfigPreset,
