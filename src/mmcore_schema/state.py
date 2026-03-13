@@ -5,15 +5,18 @@ from __future__ import annotations
 import dataclasses
 from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, TypeAlias, cast
 
 from ._primitives import PropertySetting
 from .enums import DeviceType, FocusDirection, PropertyType
 
 if TYPE_CHECKING:
+    import pymmcore  # type: ignore[import-not-found]
+    import pymmcore_nano  # type: ignore[import-not-found]
+
     from ._primitives import AffineTuple
-    from pymmcore import CMMCore
-    from pymmcore_nano import CMMCore
+
+    AnyCore: TypeAlias = pymmcore.CMMCore | pymmcore_nano.CMMCore
 
 
 @dataclass(slots=True)
@@ -34,7 +37,7 @@ class PropertyInfo:
     @classmethod
     def from_core(
         cls,
-        core: Any,
+        core: AnyCore,
         device: str,
         prop: str,
         *,
@@ -71,7 +74,7 @@ class PropertyInfo:
             data_type=PropertyType(int(core.getPropertyType(device, prop))),
             is_read_only=core.isPropertyReadOnly(device, prop),
             is_pre_init=core.isPropertyPreInit(device, prop),
-            allowed_values=core.getAllowedPropertyValues(device, prop),
+            allowed_values=tuple(core.getAllowedPropertyValues(device, prop)),
             limits=limits,
             device_label=device,
             device_type=device_type,
@@ -81,7 +84,7 @@ class PropertyInfo:
     @classmethod
     def all_from_core(
         cls,
-        core: Any,
+        core: AnyCore,
         device: str,
         *,
         cached: bool = True,
@@ -91,9 +94,7 @@ class PropertyInfo:
         if device_type is None:
             device_type = DeviceType(int(core.getDeviceType(device)))
         return tuple(
-            cls.from_core(
-                core, device, prop, cached=cached, device_type=device_type
-            )
+            cls.from_core(core, device, prop, cached=cached, device_type=device_type)
             for prop in core.getDevicePropertyNames(device)
         )
 
@@ -115,13 +116,7 @@ class DeviceInfo:
     child_names: tuple[str, ...] = ()
 
     @classmethod
-    def from_core(
-        cls,
-        core: Any,
-        label: str,
-        *,
-        cached: bool = True,
-    ) -> DeviceInfo:
+    def from_core(cls, core: AnyCore, label: str, *, cached: bool = True) -> DeviceInfo:
         """Read runtime information about a loaded device."""
         devtype = DeviceType(int(core.getDeviceType(label)))
 
@@ -131,14 +126,12 @@ class DeviceInfo:
 
         with suppress(RuntimeError):
             if devtype == DeviceType.Hub:
-                child_names = core.getInstalledDevices(label)
+                child_names = tuple(core.getInstalledDevices(label))
             if devtype == DeviceType.State:
-                state_labels = core.getStateLabels(label)
+                state_labels = tuple(core.getStateLabels(label))
             elif devtype == DeviceType.Stage:
                 with suppress(RuntimeError):
-                    focus_direction = FocusDirection(
-                        int(core.getFocusDirection(label))
-                    )
+                    focus_direction = FocusDirection(int(core.getFocusDirection(label)))
 
         return cls(
             label=label,
@@ -157,19 +150,15 @@ class DeviceInfo:
 
     @classmethod
     def all_from_core(
-        cls,
-        core: Any,
-        *,
-        cached: bool = True,
+        cls, core: AnyCore, *, cached: bool = True
     ) -> tuple[DeviceInfo, ...]:
         """Read information about all loaded devices."""
         return tuple(
-            cls.from_core(core, lbl, cached=cached)
-            for lbl in core.getLoadedDevices()
+            cls.from_core(core, lbl, cached=cached) for lbl in core.getLoadedDevices()
         )
 
     @classmethod
-    def available_from_core(cls, core: Any) -> tuple[DeviceInfo, ...]:
+    def available_from_core(cls, core: AnyCore) -> tuple[DeviceInfo, ...]:
         """Read all available (not yet loaded) device adapters from core."""
         result: list[DeviceInfo] = []
         for library in core.getDeviceAdapterNames():
@@ -214,7 +203,7 @@ class ConfigGroup:
     @classmethod
     def from_core(
         cls,
-        core: Any,
+        core: AnyCore,
         group_name: str,
         *,
         enrich: bool = False,
@@ -241,15 +230,13 @@ class ConfigGroup:
                     settings.append(
                         PropertyInfo(name=prop, device_label=device, value=val)
                     )
-            presets[preset_name] = ConfigPreset(
-                name=preset_name, settings=settings
-            )
+            presets[preset_name] = ConfigPreset(name=preset_name, settings=settings)
         return cls(name=group_name, presets=presets)
 
     @classmethod
     def all_from_core(
         cls,
-        core: Any,
+        core: AnyCore,
         *,
         enrich: bool = False,
     ) -> tuple[ConfigGroup, ...]:
@@ -283,7 +270,7 @@ class PixelSizePreset:
     optimal_z_um: float = 0.0
 
     @classmethod
-    def from_core(cls, core: Any, config_name: str) -> PixelSizePreset:
+    def from_core(cls, core: AnyCore, config_name: str) -> PixelSizePreset:
         """Read a single pixel size preset from core."""
         cfg = core.getPixelSizeConfigData(config_name)
         settings = [
@@ -295,42 +282,27 @@ class PixelSizePreset:
             for i in range(cfg.size())
         ]
 
-        affine = core.getPixelSizeAffineByID(config_name)
-
-        dxdz = 0.0
-        dydz = 0.0
-        optimal_z_um = 0.0
-        if hasattr(core, "getPixelSizedxdz"):
-            dxdz = core.getPixelSizedxdz(config_name)
-        if hasattr(core, "getPixelSizedydz"):
-            dydz = core.getPixelSizedydz(config_name)
-        if hasattr(core, "getPixelSizeOptimalZUm"):
-            optimal_z_um = core.getPixelSizeOptimalZUm(config_name)
-
         return cls(
             name=config_name,
             settings=settings,
             pixel_size_um=core.getPixelSizeUmByID(config_name),
-            affine=affine,
-            dxdz=dxdz,
-            dydz=dydz,
-            optimal_z_um=optimal_z_um,
+            affine=cast("AffineTuple", tuple(core.getPixelSizeAffineByID(config_name))),
+            dxdz=core.getPixelSizedxdz(config_name),
+            dydz=core.getPixelSizedydz(config_name),
+            optimal_z_um=core.getPixelSizeOptimalZUm(config_name),
         )
 
     @classmethod
-    def all_from_core(cls, core: Any) -> tuple[PixelSizePreset, ...]:
+    def all_from_core(cls, core: AnyCore) -> tuple[PixelSizePreset, ...]:
         """Read all pixel size presets from core."""
         return tuple(
-            cls.from_core(core, name)
-            for name in core.getAvailablePixelSizeConfigs()
+            cls.from_core(core, name) for name in core.getAvailablePixelSizeConfigs()
         )
 
-    def apply_to_core(self, core: Any) -> None:
+    def apply_to_core(self, core: AnyCore) -> None:
         """Define this pixel size preset in core."""
         for s in self.settings:
-            core.definePixelSizeConfig(
-                self.name, s.device, s.property, s.value
-            )
+            core.definePixelSizeConfig(self.name, s.device, s.property, s.value)
         core.setPixelSizeUm(self.name, self.pixel_size_um)
         core.setPixelSizeAffine(self.name, self.affine)
 
@@ -344,7 +316,7 @@ class SystemState:
     pixel_size_configs: tuple[PixelSizePreset, ...] = ()
 
     @classmethod
-    def from_core(cls, core: Any, *, cached: bool = True) -> SystemState:
+    def from_core(cls, core: AnyCore, *, cached: bool = True) -> SystemState:
         """Read a complete snapshot of the running system."""
         return cls(
             devices=DeviceInfo.all_from_core(core, cached=cached),
