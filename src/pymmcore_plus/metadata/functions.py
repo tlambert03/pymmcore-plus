@@ -4,7 +4,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Any, TypedDict
 
 import pymmcore_plus
-from pymmcore_plus import core_io
+from mmcore_schema import state
 from pymmcore_plus._util import timestamp
 from pymmcore_plus.core._constants import DeviceType, PixelFormat
 
@@ -12,18 +12,6 @@ if TYPE_CHECKING:
     import useq
     from typing_extensions import Unpack
 
-    from mmcore_schema.state import (
-        ConfigGroup as _StateConfigGroup,
-    )
-    from mmcore_schema.state import (
-        DeviceInfo as _StateDeviceInfo,
-    )
-    from mmcore_schema.state import (
-        PixelSizePreset as _StatePixelSizePreset,
-    )
-    from mmcore_schema.state import (
-        PropertyInfo as _StatePropertyInfo,
-    )
     from pymmcore_plus.core import CMMCorePlus
 
     from .schema import (
@@ -67,17 +55,19 @@ def summary_metadata(
     See [pymmcore_plus.metadata.SummaryMetaV1][] for a description of the
     dictionary format.
     """
-    state = core_io.read_system_state(core, cached=cached)
+    sys_state = state.SystemState.from_core(core, cached=cached)
     summary: SummaryMetaV1 = {
         "format": "summary-dict",
         "version": "1.0",
-        "devices": tuple(_convert_device(d, core) for d in state.devices),
+        "devices": tuple(_convert_device(d, core) for d in sys_state.devices),
         "system_info": system_info(core),
         "image_infos": image_infos(core),
         "position": position(core),
-        "config_groups": tuple(_convert_config_group(g) for g in state.config_groups),
+        "config_groups": tuple(
+            _convert_config_group(g) for g in sys_state.config_groups
+        ),
         "pixel_size_configs": tuple(
-            _convert_pixel_size_preset(p) for p in state.pixel_size_configs
+            _convert_pixel_size_preset(p) for p in sys_state.pixel_size_configs
         ),
     }
     if include_time:
@@ -120,7 +110,7 @@ def frame_metadata(
 
 def device_info(core: CMMCorePlus, *, label: str, cached: bool = True) -> DeviceInfo:
     """Return information about a specific device label."""
-    state_dev = core_io.read_device_info(core, label, cached=cached)
+    state_dev = state.DeviceInfo.from_core(core, label, cached=cached)
     return _convert_device(state_dev, core)
 
 
@@ -247,22 +237,26 @@ def position(core: CMMCorePlus, all_stages: bool = False) -> Position:
 
 def config_group(core: CMMCorePlus, *, group_name: str) -> ConfigGroup:
     """Return a dictionary of configuration presets for a specific group."""
-    return _convert_config_group(core_io.read_config_group(core, group_name))
+    return _convert_config_group(state.ConfigGroup.from_core(core, group_name))
 
 
 def config_groups(core: CMMCorePlus) -> tuple[ConfigGroup, ...]:
     """Return all configuration groups."""
-    return tuple(_convert_config_group(g) for g in core_io.read_config_groups(core))
+    return tuple(
+        _convert_config_group(g) for g in state.ConfigGroup.all_from_core(core)
+    )
 
 
 def pixel_size_config(core: CMMCorePlus, *, config_name: str) -> PixelSizeConfigPreset:
     """Return info for a specific pixel size preset."""
-    return _convert_pixel_size_preset(core_io.read_pixel_size_preset(core, config_name))
+    return _convert_pixel_size_preset(
+        state.PixelSizePreset.from_core(core, config_name)
+    )
 
 
 def devices_info(core: CMMCorePlus, cached: bool = True) -> tuple[DeviceInfo, ...]:
     """Return a dictionary of device information for all loaded devices."""
-    state_devs = core_io.read_devices(core, cached=cached)
+    state_devs = state.DeviceInfo.all_from_core(core, cached=cached)
     return tuple(_convert_device(d, core) for d in state_devs)
 
 
@@ -274,7 +268,7 @@ def property_info(
     cached: bool = True,
 ) -> PropertyInfo:
     """Return information on a specific device property."""
-    state_prop = core_io.read_property_info(core, device, prop, cached=cached)
+    state_prop = state.PropertyInfo.from_core(core, device, prop, cached=cached)
     return _convert_property(state_prop, core, device)
 
 
@@ -282,14 +276,15 @@ def properties(
     core: CMMCorePlus, device: str, *, cached: bool = True
 ) -> tuple[PropertyInfo, ...]:
     """Return a dictionary of device properties values for all loaded devices."""
-    state_props = core_io.read_properties(core, device, cached=cached)
+    state_props = state.PropertyInfo.all_from_core(core, device, cached=cached)
     return tuple(_convert_property(p, core, device) for p in state_props)
 
 
 def pixel_size_configs(core: CMMCorePlus) -> tuple[PixelSizeConfigPreset, ...]:
     """Return a dictionary of pixel size configurations."""
     return tuple(
-        _convert_pixel_size_preset(p) for p in core_io.read_pixel_size_presets(core)
+        _convert_pixel_size_preset(p)
+        for p in state.PixelSizePreset.all_from_core(core)
     )
 
 
@@ -299,7 +294,7 @@ _IDENTITY_AFFINE = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0)
 
 
 def _convert_property(
-    prop: _StatePropertyInfo,
+    prop: state.PropertyInfo,
     core: CMMCorePlus,
     device: str,
 ) -> PropertyInfo:
@@ -324,7 +319,7 @@ def _convert_property(
 
 
 def _convert_device(
-    dev: _StateDeviceInfo,
+    dev: state.DeviceInfo,
     core: CMMCorePlus,
 ) -> DeviceInfo:
     """Convert mmcore_schema.state.DeviceInfo to metadata DeviceInfo."""
@@ -358,7 +353,7 @@ def _convert_device(
     return info
 
 
-def _convert_config_group(group: _StateConfigGroup) -> ConfigGroup:
+def _convert_config_group(group: state.ConfigGroup) -> ConfigGroup:
     """Convert mmcore_schema.state.ConfigGroup to metadata ConfigGroup."""
     return {
         "name": group.name,
@@ -376,7 +371,7 @@ def _convert_config_group(group: _StateConfigGroup) -> ConfigGroup:
 
 
 def _convert_pixel_size_preset(
-    preset: _StatePixelSizePreset,
+    preset: state.PixelSizePreset,
 ) -> PixelSizeConfigPreset:
     """Convert mmcore_schema.state.PixelSizePreset to metadata TypedDict."""
     info: PixelSizeConfigPreset = {

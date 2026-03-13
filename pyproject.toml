@@ -58,7 +58,7 @@ cli = ["typer >=0.13.0", "rich >=10.2.0"]
 io = ["ome-writers[tifffile,tensorstore]>=0.3.0"]
 simulate = ["pillow >=11.0"]
 PySide2 = ["PySide2 >=5.15.2.1"]
-PySide6 = ["PySide6 ==6.7.3"]
+PySide6 = ["PySide6 >=6.7.3"]
 PyQt5 = ["PyQt5 >=5.15.4"]
 PyQt6 = ["PyQt6 >=6.4.2"]
 
@@ -83,7 +83,7 @@ test = [
     "lxml >=6.0",
 ]
 test-codspeed = [{ include-group = "test" }, "pytest-codspeed >=3.2.0"]
-test-qt = [{ include-group = 'test' }, "pytest-qt ==4.4", "qtpy >=2"]
+test-qt = [{ include-group = 'test' }, "pytest-qt >=4.5", "qtpy >=2"]
 PyQt6 = [{ include-group = 'test-qt' }, "pymmcore-plus[PyQt6]"]
 PySide6 = [{ include-group = 'test-qt' }, "pymmcore-plus[PySide6]"]
 PyQt5 = [{ include-group = 'test-qt' }, "pymmcore-plus[PyQt5]"]
@@ -99,6 +99,7 @@ dev = [
     "opencv-python>=4.11.0.86",
     "pytest-xdist>=3.8.0",
     "prek>=0.3.4",
+    "pymmcore-nano>=11.10.0.74.0",
 ]
 
 [tool.uv.sources]
