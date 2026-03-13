@@ -22,6 +22,9 @@ class PropertyInfo:
     is_pre_init: bool = False
     allowed_values: tuple[str, ...] = ()
     limits: tuple[float, float] | None = None
+    device_label: str = ""
+    device_type: DeviceType = DeviceType.Unknown
+    sequence_max_length: int = 0
 
 
 @dataclass(slots=True)

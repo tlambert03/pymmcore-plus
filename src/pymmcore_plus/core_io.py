@@ -33,6 +33,7 @@ def read_property_info(
     prop: str,
     *,
     cached: bool = True,
+    device_type: DeviceType | None = None,
 ) -> PropertyInfo:
     """Read information about a single device property from core."""
     try:
@@ -51,6 +52,13 @@ def read_property_info(
             core.getPropertyUpperLimit(device, prop),
         )
 
+    seq_max = 0
+    if core.isPropertySequenceable(device, prop):
+        seq_max = core.getPropertySequenceMaxLength(device, prop)
+
+    if device_type is None:
+        device_type = DeviceType(int(core.getDeviceType(device)))
+
     return PropertyInfo(
         name=prop,
         value=value or "",
@@ -59,6 +67,9 @@ def read_property_info(
         is_pre_init=core.isPropertyPreInit(device, prop),
         allowed_values=core.getAllowedPropertyValues(device, prop),
         limits=limits,
+        device_label=device,
+        device_type=device_type,
+        sequence_max_length=seq_max,
     )
 
 
@@ -67,10 +78,15 @@ def read_properties(
     device: str,
     *,
     cached: bool = True,
+    device_type: DeviceType | None = None,
 ) -> tuple[PropertyInfo, ...]:
     """Read all properties for a device."""
+    if device_type is None:
+        device_type = DeviceType(int(core.getDeviceType(device)))
     return tuple(
-        read_property_info(core, device, prop, cached=cached)
+        read_property_info(
+            core, device, prop, cached=cached, device_type=device_type
+        )
         for prop in core.getDevicePropertyNames(device)
     )
 
@@ -104,7 +120,7 @@ def read_device_info(
         name=core.getDeviceName(label),
         description=core.getDeviceDescription(label),
         type=devtype,
-        properties=read_properties(core, label, cached=cached),
+        properties=read_properties(core, label, cached=cached, device_type=devtype),
         parent_label=core.getParentLabel(label),
         state_labels=state_labels,
         focus_direction=focus_direction,
