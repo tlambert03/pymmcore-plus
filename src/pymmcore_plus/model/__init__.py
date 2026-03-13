@@ -2,6 +2,14 @@ from __future__ import annotations
 
 import importlib
 import warnings
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ._config_group import ConfigGroup, ConfigPreset, Setting
+    from ._core_device import CoreDevice
+    from ._device import AvailableDevice, Device, Microscope
+    from ._pixel_size_config import PixelSizeGroup, PixelSizePreset
+    from ._property import Property
 
 __all__ = [
     "AvailableDevice",
