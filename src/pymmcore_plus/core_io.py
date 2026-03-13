@@ -20,6 +20,8 @@ from mmcore_schema.state import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     import pymmcore
 
 # --------------- Property / Device reads ---------------
@@ -231,3 +233,23 @@ def apply_config(
     """Apply a configuration preset to core."""
     core.setConfig(group_name, preset_name)
     core.waitForConfig(group_name, preset_name)
+
+
+def apply_pixel_size_preset(
+    core: pymmcore.CMMCore,
+    preset: PixelSizePreset,
+) -> None:
+    """Define a single pixel size preset in core."""
+    for s in preset.settings:
+        core.definePixelSizeConfig(preset.name, s.device, s.property, s.value)
+    core.setPixelSizeUm(preset.name, preset.pixel_size_um)
+    core.setPixelSizeAffine(preset.name, preset.affine)
+
+
+def apply_pixel_size_presets(
+    core: pymmcore.CMMCore,
+    presets: Iterable[PixelSizePreset],
+) -> None:
+    """Define multiple pixel size presets in core."""
+    for preset in presets:
+        apply_pixel_size_preset(core, preset)
