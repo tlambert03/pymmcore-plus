@@ -49,7 +49,7 @@ class ConfigPreset:
     """A named preset within a config group."""
 
     name: str
-    settings: list[PropertySetting] = field(default_factory=list)
+    settings: list[PropertyInfo] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -58,12 +58,19 @@ class ConfigGroup:
 
     name: str
     presets: dict[str, ConfigPreset] = field(default_factory=dict)
+    is_channel_group: bool = False
+
+    @property
+    def is_system_group(self) -> bool:
+        return self.name.lower() == "system"
 
 
 @dataclass(slots=True)
-class PixelSizePreset(ConfigPreset):
+class PixelSizePreset:
     """A pixel size preset with calibration data."""
 
+    name: str
+    settings: list[PropertySetting] = field(default_factory=list)
     pixel_size_um: float = 0.0
     affine: AffineTuple = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0)
     dxdz: float = 0.0

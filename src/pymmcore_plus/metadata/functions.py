@@ -369,7 +369,7 @@ def _convert_config_group(group: _StateConfigGroup) -> ConfigGroup:
             {
                 "name": preset.name,
                 "settings": tuple(
-                    {"dev": s.device, "prop": s.property, "val": s.value}
+                    {"dev": s.device_label, "prop": s.name, "val": s.value}
                     for s in preset.settings
                 ),
             }

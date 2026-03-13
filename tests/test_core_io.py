@@ -125,7 +125,7 @@ def test_read_config_group(demo_core: pymmcore_plus.CMMCorePlus) -> None:
         assert isinstance(preset, ConfigPreset)
         assert preset.name == name
         assert len(preset.settings) > 0
-        assert all(isinstance(s, PropertySetting) for s in preset.settings)
+        assert all(isinstance(s, PropertyInfo) for s in preset.settings)
 
 
 def test_read_config_groups(demo_core: pymmcore_plus.CMMCorePlus) -> None:

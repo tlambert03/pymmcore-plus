@@ -45,7 +45,7 @@ def test_config_preset() -> None:
     preset = ConfigPreset(
         name="DAPI",
         settings=[
-            PropertySetting(device="Dichroic", property="Label", value="400"),
+            PropertyInfo(name="Label", device_label="Dichroic", value="400"),
         ],
     )
     assert preset.name == "DAPI"
@@ -72,7 +72,6 @@ def test_pixel_size_preset() -> None:
     )
     assert preset.pixel_size_um == 0.5
     assert preset.affine == (1.0, 0.0, 0.0, 0.0, 1.0, 0.0)
-    # inherits from ConfigPreset
     assert preset.name == "Res20x"
     assert isinstance(preset.settings, list)
 
@@ -117,9 +116,9 @@ def test_state_serialization_round_trip() -> None:
                     "DAPI": ConfigPreset(
                         name="DAPI",
                         settings=[
-                            PropertySetting(
-                                device="Dichroic",
-                                property="Label",
+                            PropertyInfo(
+                                name="Label",
+                                device_label="Dichroic",
                                 value="400",
                             ),
                         ],

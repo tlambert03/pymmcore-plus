@@ -6,6 +6,7 @@ CoreObject protocol pattern in pymmcore_plus.model.
 
 from __future__ import annotations
 
+import dataclasses
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
@@ -145,28 +146,55 @@ def read_devices(
 def read_config_group(
     core: pymmcore.CMMCore,
     group_name: str,
+    *,
+    enrich: bool = False,
 ) -> ConfigGroup:
-    """Read a single config group with all its presets from core."""
+    """Read a single config group with all its presets from core.
+
+    If *enrich* is True, each setting is populated with full property metadata
+    (allowed values, limits, etc.) via ``read_property_info``.  Otherwise only
+    *name*, *device_label*, and *value* are filled in.
+    """
     presets: dict[str, ConfigPreset] = {}
     for preset_name in core.getAvailableConfigs(group_name):
         cfg = core.getConfigData(group_name, preset_name)
-        settings = [
-            PropertySetting(
-                device=(s := cfg.getSetting(i)).getDeviceLabel(),
-                property=s.getPropertyName(),
-                value=s.getPropertyValue(),
-            )
-            for i in range(cfg.size())
-        ]
+        settings: list[PropertyInfo] = []
+        for i in range(cfg.size()):
+            s = cfg.getSetting(i)
+            device = s.getDeviceLabel()
+            prop = s.getPropertyName()
+            val = s.getPropertyValue()
+            if enrich:
+                info = read_property_info(core, device, prop)
+                settings.append(dataclasses.replace(info, value=val))
+            else:
+                settings.append(
+                    PropertyInfo(name=prop, device_label=device, value=val)
+                )
         presets[preset_name] = ConfigPreset(name=preset_name, settings=settings)
     return ConfigGroup(name=group_name, presets=presets)
 
 
-def read_config_groups(core: pymmcore.CMMCore) -> tuple[ConfigGroup, ...]:
-    """Read all configuration groups from core."""
-    return tuple(
-        read_config_group(core, name) for name in core.getAvailableConfigGroups()
-    )
+def read_config_groups(
+    core: pymmcore.CMMCore,
+    *,
+    enrich: bool = False,
+) -> tuple[ConfigGroup, ...]:
+    """Read all configuration groups from core.
+
+    If *enrich* is True, settings carry full property metadata.
+    The ``is_channel_group`` flag is set automatically.
+    """
+    channel_group = ""
+    with suppress(Exception):
+        channel_group = core.getChannelGroup()
+
+    groups: list[ConfigGroup] = []
+    for name in core.getAvailableConfigGroups():
+        group = read_config_group(core, name, enrich=enrich)
+        group.is_channel_group = name == channel_group
+        groups.append(group)
+    return tuple(groups)
 
 
 # --------------- Pixel size reads ---------------
@@ -216,6 +244,33 @@ def read_pixel_size_presets(core: pymmcore.CMMCore) -> tuple[PixelSizePreset, ..
         read_pixel_size_preset(core, name)
         for name in core.getAvailablePixelSizeConfigs()
     )
+
+
+# --------------- Available (unloaded) devices ---------------
+
+
+def read_available_devices(
+    core: pymmcore.CMMCore,
+) -> tuple[DeviceInfo, ...]:
+    """Read all available (not yet loaded) device adapters from core."""
+    result: list[DeviceInfo] = []
+    for library in core.getDeviceAdapterNames():
+        dev_names = core.getAvailableDevices(library)
+        types = core.getAvailableDeviceTypes(library)
+        descriptions = core.getAvailableDeviceDescriptions(library)
+        for dev_name, description, dev_type in zip(
+            dev_names, descriptions, types, strict=False
+        ):
+            result.append(
+                DeviceInfo(
+                    label="",
+                    name=dev_name,
+                    library=library,
+                    description=description,
+                    type=DeviceType(dev_type),
+                )
+            )
+    return tuple(result)
 
 
 # --------------- Composite reads ---------------
