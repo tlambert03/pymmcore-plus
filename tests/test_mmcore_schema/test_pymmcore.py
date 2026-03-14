@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from mmcore_schema.mmconfig import MMConfig
+from mmcore_schema.config import MMConfig
 
 try:
     import pymmcore

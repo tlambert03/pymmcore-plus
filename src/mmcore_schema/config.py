@@ -295,7 +295,7 @@ class MMConfig:
 
     def to_cfg(self) -> str:
         """Serialize to legacy Micro-Manager .cfg format."""
-        from .conversion import iter_mm_cfg_lines
+        from ._conversion import iter_mm_cfg_lines
 
         return "\n".join(iter_mm_cfg_lines(self))
 
@@ -326,7 +326,7 @@ class MMConfig:
         """Load a configuration from a .json, .yaml, .yml, or .cfg file."""
         fpath = Path(filename)
         if fpath.suffix == ".cfg":
-            from .conversion import read_mm_cfg_file
+            from ._conversion import read_mm_cfg_file
 
             return read_mm_cfg_file(fpath)
         if fpath.suffix == ".json":

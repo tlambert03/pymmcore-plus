@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from mmcore_schema._enums import DeviceType, FocusDirection, PropertyType
 from mmcore_schema._primitives import dataclass_to_dict
-from mmcore_schema.enums import DeviceType, FocusDirection, PropertyType
 from mmcore_schema.state import (
     ConfigGroup,
     ConfigPreset,

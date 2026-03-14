@@ -9,7 +9,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from ._primitives import PropertySetting
-from .mmconfig import (
+from .config import (
     ConfigGroup,
     Configuration,
     Device,

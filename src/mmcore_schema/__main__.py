@@ -2,8 +2,8 @@
 
 import argparse
 
-from .conversion import convert_file
-from .mmconfig import MMConfig
+from ._conversion import convert_file
+from .config import MMConfig
 
 try:
     from rich import print

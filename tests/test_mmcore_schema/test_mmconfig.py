@@ -4,7 +4,7 @@ import pytest
 
 from mmcore_schema import MMConfig
 from mmcore_schema._primitives import PropertySetting
-from mmcore_schema.mmconfig import (
+from mmcore_schema.config import (
     ConfigGroup,
     Configuration,
     Device,

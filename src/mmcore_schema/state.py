@@ -7,8 +7,8 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, TypeAlias, cast
 
+from ._enums import DeviceType, FocusDirection, PropertyType
 from ._primitives import PropertySetting
-from .enums import DeviceType, FocusDirection, PropertyType
 
 if TYPE_CHECKING:
     import pymmcore  # type: ignore[import-not-found]

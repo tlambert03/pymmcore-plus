@@ -7,10 +7,10 @@ try:
 except PackageNotFoundError:
     __version__ = "uninstalled"
 
+from ._conversion import convert_file
+from ._enums import DeviceType, FocusDirection, PropertyType
 from ._primitives import IDENTITY_AFFINE, AffineTuple, PropertySetting
-from .conversion import convert_file
-from .enums import DeviceType, FocusDirection, PropertyType
-from .mmconfig import (
+from .config import (
     SCHEMA_URL_BASE,
     ConfigGroup,
     Configuration,

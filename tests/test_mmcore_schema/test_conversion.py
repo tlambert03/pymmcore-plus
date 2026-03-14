@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from mmcore_schema import MMConfig
-from mmcore_schema.conversion import read_mm_cfg_file
+from mmcore_schema._conversion import read_mm_cfg_file
 
 if TYPE_CHECKING:
     from pathlib import Path

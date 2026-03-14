@@ -283,8 +283,7 @@ def properties(
 def pixel_size_configs(core: CMMCorePlus) -> tuple[PixelSizeConfigPreset, ...]:
     """Return a dictionary of pixel size configurations."""
     return tuple(
-        _convert_pixel_size_preset(p)
-        for p in state.PixelSizePreset.all_from_core(core)
+        _convert_pixel_size_preset(p) for p in state.PixelSizePreset.all_from_core(core)
     )
 
 
