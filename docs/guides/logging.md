@@ -33,14 +33,14 @@ You may also configure logging using the following environment variables:
     file manager.
 
 Note that both pymmcore-plus and the underlying CMMCore object will write to the log
-file. By default, [CMMCorePlus](../api/cmmcoreplus.md) will call `setPrimaryLogFile()`
+file. By default, [CMMCorePlus][pymmcore_plus.CMMCorePlus] will call `setPrimaryLogFile()`
 with the location of the pymmcore-plus logfile upon instantiation.
 
 ## Managing logs with the CLI
 
 The `mmcore` CLI provides a `logs` subcommand for managing logs.
 
-{{ CLI_Logs }}
+--8<-- "docs/_generated/cli_logs.md"
 
 A particularly useful command is `mmcore logs --tail`, which will continually
 stream the current logfile to the console. This can be started in another

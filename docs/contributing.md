@@ -21,7 +21,7 @@ Using `uv`:
 git clone <your fork>
 cd pymmcore-plus
 uv sync
-pre-commit install
+prek install  # or: pre-commit install
 ```
 
 ```sh
@@ -46,16 +46,12 @@ pip install -e . --group dev
 
 ## Contributing Documentation
 
-Our documentation is built with [mkdocs](https://www.mkdocs.org/) from the files
-in the `docs` folder.  To build docs locally:
-
-```shell
-# build docs and serve locally
-uv run --group docs mkdocs serve
-```
-
-The docs should be live at <http://127.0.0.1:8000> and will update automatically
-as you edit and save them.
+These docs are written in the `docs/` folder of this repository (and in
+docstrings), but are published as part of the unified pymmcore-plus ecosystem
+site, built by
+[pymmcore-plus/pymmcore-plus.github.io](https://github.com/pymmcore-plus/pymmcore-plus.github.io).
+See [How these docs work](../contributing/docs.md) for how to preview your
+changes locally.
 
 ## Developing on Apple Silicon
 

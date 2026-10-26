@@ -8,25 +8,25 @@ pure python/C environments**.
 
 - `pymmcore-plus` itself is a superset of
   [`pymmcore`](https://github.com/micro-manager/pymmcore) (python bindings
-  for Micro-manager's C++ `CMMCore`). [`pymmcore_plus.CMMCorePlus`](api/cmmcoreplus.md) (the main object in this library)
+  for Micro-manager's C++ `CMMCore`). [`pymmcore_plus.CMMCorePlus`][pymmcore_plus.CMMCorePlus] (the main object in this library)
   aims to be a drop-in replacement for `pymmcore.CMMCore`, while adding a number
   of additional features including:
 
     - A multi-dimensional [acquisition engine][pymmcore_plus.CMMCorePlus.run_mda]
       implemented in pure python. (The existing acquisition engines in
       Micro-manager are written in Java and Clojure).
-    - More flexible [event](api/events.md) connections and callback handling.
+    - More flexible [event](guides/events.md) connections and callback handling.
     - Extended convenience APIs for working with core (which would be hard or
       impossible to implement in the `pymmcore` SWIG wrapper).
     - More pythonic APIs for various pymmcore objects (e.g. [`pymmcore_plus.Device`][],
-      [`pymmcore_plus.Configuration`][]) and [constants](api/constants.md).
+      [`pymmcore_plus.Configuration`][]) and [constants](guides/constants.md).
 
-- [`pymmcore-widgets`](https://github.com/pymmcore-plus/pymmcore-widgets) is a
-    [Qt](https://www.google.com/search?q=qt)-based widget library built on
+- [`pymmcore-widgets`](../pymmcore-widgets/index.md) is a
+    [Qt](https://www.qt.io)-based widget library built on
     `pymmcore-plus` that provides GUI elements for
     most of the device and acquisition functionality of `pymmcore`.  It
     allows users to build their own custom GUIs for Micro-manager.
-- [`napari-micromanager`](https://github.com/pymmcore-plus/napari-micromanager)
+- [`napari-micromanager`](../napari-micromanager/index.md)
     is a plugin for the [napari](https://napari.org/) image viewer that composes
     `pymmcore-plus` and `pymmcore-widgets` to provide a full GUI for
     Micro-manager that is integrated with the napari viewer.
@@ -64,70 +64,16 @@ pure python/C environments**.
 
     ![micro-manager ecosystem components](images/components.png){ loading=lazy }
 
-## Quickstart
+## Getting started
 
-### Install
-
-Install with `pip` or `conda`:
-
-```bash
-pip install pymmcore-plus
-
-# OR, to include the `mmcore` command line tool
-pip install "pymmcore-plus[cli]"
-
-# OR
-conda install -c conda-forge pymmcore-plus
-```
-
-You will also need the micro-manager device adapters on your system.
-To get them quickly, assuming you have installed with `pymmcore-plus[cli]`,
-you can run:
-
-```bash
-mmcore install
-```
-
-> *See [install](install.md) for more details.*
-
-### Usage
-
-The main object is [`pymmcore_plus.CMMCorePlus`][], which is an enhanced subclass
-of `pymmcore.CMMCore`:
-
-```python
-from pymmcore_plus import CMMCorePlus
-
-# instantiate as you would pymmcore.CMMCore
-mmc = CMMCorePlus()
-# OR: use the global singleton
-# mmc = CMMCorePlus.instance()
-
-# without arguments, this will load the demo config
-mmc.loadSystemConfiguration()
-```
-
-See the [`CMMCorePlus` API documentation](api/cmmcoreplus.md) for details on
-the additional features of `CMMCorePlus`.
-
-!!! tip "`CMMCorePlus.instance`"
-
-    Creating/accessing a `CMMCorePlus` object using
-    [`CMMCorePlus.instance()`][pymmcore_plus.CMMCorePlus.instance] is a
-    convenient way to access the same core instance from multiple places in your
-    code. All widgets in
-    [`pymmcore-widgets`](https://github.com/pymmcore-plus/pymmcore-widgets) also use
-    `CMMCorePlus.instance()` by default, so any widgets you use will automatically
-    connect to the same core instance without any additional configuration.
-
-    Attempts *are* made to make it thread-safe.  But please open an issue
-    if you find any problems.
-
-While you can easily use `pymmcore-plus` from a script or IPython/Jupyter you can
-also use it in combination with the [napari](https://napari.org/) based gui
-[napari-micromanager](https://github.com/pymmcore-plus/napari-micromanager#napari-micromanager).
-See [using with napari-micromanager](examples/napari-micromanager.md) for an
-example of how to use them together.
+- [Install](install.md) `pymmcore-plus` and the Micro-Manager device adapters.
+- [First steps](../getting-started/first-steps.md): load a configuration, snap
+  images, read and set properties, react to events.
+- [Your first acquisition](../getting-started/first-acquisition.md): run
+  multi-dimensional acquisitions.
+- The [`CMMCorePlus` reference][pymmcore_plus.CMMCorePlus] lists every method of
+  the core, marking what `pymmcore-plus` adds (:sparkles:) or overrides
+  (:material-plus-thick:).
 
 ## Contributing
 

@@ -1,7 +1,7 @@
-# Metadata Schema
+# Metadata Schema {#pymmcore_plus.metadata}
 
 This page defines the schema for the metadata `dicts` emitted during the
-course of an [Multi-dimensional Acquisition](./guides/mda_engine.md) (MDA).
+course of an [Multi-dimensional Acquisition](../../../guides/mda_engine.md) (MDA).
 
 These are not classes (and should not be imported outside of a
 [`typing.TYPE_CHECKING`][] clause), but rather are [`typing.TypedDict`][]
@@ -12,16 +12,16 @@ MDA.  One use case for these definitions is to provide type hints for the
 arguments to these callbacks, which is both handy for looking up the structure
 of the metadata and for static type checking.
 
-![metadata hints](./images/meta_hints.png)
+![metadata hints](../../../images/meta_hints.png)
 
 ## Primary Metadata Types
 
-:::pymmcore_plus.metadata.SummaryMetaV1
+::: pymmcore_plus.metadata.SummaryMetaV1
     options:
         heading_level: 3
         members: []
 
-:::pymmcore_plus.metadata.FrameMetaV1
+::: pymmcore_plus.metadata.FrameMetaV1
     options:
         heading_level: 3
         members: []
@@ -30,52 +30,52 @@ of the metadata and for static type checking.
 
 ## Supporting Types
 
-:::pymmcore_plus.metadata.DeviceInfo
+::: pymmcore_plus.metadata.DeviceInfo
     options:
         heading_level: 3
         members: []
 
-:::pymmcore_plus.metadata.SystemInfo
+::: pymmcore_plus.metadata.SystemInfo
     options:
         heading_level: 3
         members: []
 
-:::pymmcore_plus.metadata.ImageInfo
+::: pymmcore_plus.metadata.ImageInfo
     options:
         heading_level: 3
         members: []
 
-:::pymmcore_plus.metadata.ConfigGroup
+::: pymmcore_plus.metadata.ConfigGroup
     options:
         heading_level: 3
         members: []
 
-:::pymmcore_plus.metadata.ConfigPreset
+::: pymmcore_plus.metadata.ConfigPreset
     options:
         heading_level: 3
         members: []
 
-:::pymmcore_plus.metadata.PixelSizeConfigPreset
+::: pymmcore_plus.metadata.PixelSizeConfigPreset
     options:
         heading_level: 3
         members: []
 
-:::pymmcore_plus.metadata.PropertyInfo
+::: pymmcore_plus.metadata.PropertyInfo
     options:
         heading_level: 3
         members: []
 
-:::pymmcore_plus.metadata.PropertyValue
+::: pymmcore_plus.metadata.PropertyValue
     options:
         heading_level: 3
         members: []
 
-:::pymmcore_plus.metadata.Position
+::: pymmcore_plus.metadata.Position
     options:
         heading_level: 3
         members: []
 
-:::pymmcore_plus.metadata.StagePosition
+::: pymmcore_plus.metadata.StagePosition
     options:
         heading_level: 3
         members: []
@@ -90,12 +90,25 @@ argument to either the
 [`frameReady`][pymmcore_plus.mda.events.PMDASignaler.frameReady] callbacks in an
 MDA. However, they can also be generated with the following functions.
 
-:::pymmcore_plus.metadata.summary_metadata
+::: pymmcore_plus.metadata.summary_metadata
     options:
         show_source: true
         heading_level: 3
 
-:::pymmcore_plus.metadata.frame_metadata
+::: pymmcore_plus.metadata.frame_metadata
     options:
         show_source: true
+        heading_level: 3
+
+## Serialization
+
+Helpers to convert metadata (which may contain numpy arrays, `useq` objects,
+etc.) to builtin Python types or JSON.
+
+::: pymmcore_plus.metadata.to_builtins
+    options:
+        heading_level: 3
+
+::: pymmcore_plus.metadata.json_dumps
+    options:
         heading_level: 3

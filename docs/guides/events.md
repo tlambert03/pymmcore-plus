@@ -87,8 +87,13 @@ support the same connection/disconnection API.)
     ```
 
 The signature of the callback function should match the signature of the event
-emitter's signal.  See [API documentation](../api/events.md) for the specific
-event signatures.
+emitter's signal.  The available events and their signatures are defined by
+two protocols:
+
+- [`PCoreSignaler`][pymmcore_plus.PCoreSignaler]: events emitted at `CMMCorePlus.events`
+  when the state of the microscope changes.
+- [`PMDASignaler`][pymmcore_plus.mda.events.PMDASignaler]: events emitted at
+  `CMMCorePlus.mda.events` as an acquisition sequence progresses.
 
 You may **disconnect** a callback from an event by calling the `disconnect` method
 of the event emitter with the callback function as the argument.

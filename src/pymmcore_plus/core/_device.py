@@ -37,7 +37,7 @@ class Device:
         Device label assigned to this device.
     mmcore : CMMCorePlus
         CMMCorePlus instance that owns this device.
-    device_type : DeviceType or Device subclass, optional
+    type : DeviceType, optional
         The type of device to create. If not specified, the type will be inferred
         from the core if the device is already loaded. If the device is not loaded,
         an error will be raised. This parameter is mainly intended for usage when

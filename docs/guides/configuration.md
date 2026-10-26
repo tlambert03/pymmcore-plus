@@ -58,10 +58,10 @@ which is a [`MutableMapping`][collections.abc.MutableMapping] where the keys are
 Preset](https://micro-manager.org/Micro-Manager_Configuration_Guide#configuration-presets)
 names and the values are `Configuration` objects.
 
-::: pymmcore_plus.Configuration
-    options:
-        heading_level: 3
+!!! tip "API reference"
 
-::: pymmcore_plus.ConfigGroup
-    options:
-        heading_level: 3
+    See [`Configuration`][pymmcore_plus.Configuration] and
+    [`ConfigGroup`][pymmcore_plus.ConfigGroup] for the full API, and the
+    *Config groups & presets* section of the
+    [`CMMCorePlus` method summary][cmmcoreplus-config-groups-presets] for the
+    related core methods.

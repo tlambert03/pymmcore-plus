@@ -36,8 +36,8 @@ experimental sequences defined using
 ## Cancelling or Pausing
 
 You can pause or cancel the mda with the
-[`CMMCorePlus.mda.toggle_pause`][pymmcore_plus.mda._runner.MDARunner.toggle_pause]
-or [`CMMCorePlus.mda.cancel`][pymmcore_plus.mda._runner.MDARunner.cancel]
+[`CMMCorePlus.mda.set_paused`][pymmcore_plus.mda.MDARunner.set_paused]
+or [`CMMCorePlus.mda.cancel`][pymmcore_plus.mda.MDARunner.cancel]
 methods.
 
 ## Registering a new MDA Engine

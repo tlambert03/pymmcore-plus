@@ -695,13 +695,13 @@ to][pymmcore_plus.mda.events.PMDASignaler].
 ## Cancelling or Pausing
 
 You can pause or cancel the mda with the
-[`CMMCorePlus.mda.toggle_pause`][pymmcore_plus.mda._runner.MDARunner.toggle_pause]
-or [`CMMCorePlus.mda.cancel`][pymmcore_plus.mda._runner.MDARunner.cancel]
+[`CMMCorePlus.mda.set_paused`][pymmcore_plus.mda.MDARunner.set_paused]
+or [`CMMCorePlus.mda.cancel`][pymmcore_plus.mda.MDARunner.cancel]
 methods.
 
 ```python
-mmc.mda.toggle_pause()  # pauses the mda
-mmc.mda.toggle_pause()  # resumes the mda
+mmc.mda.set_paused(True)   # pauses the mda
+mmc.mda.set_paused(False)  # resumes the mda
 
 mmc.mda.cancel()  # cancels the mda
 ```

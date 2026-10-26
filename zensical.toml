@@ -1,0 +1,23 @@
+# pymmcore-plus docs are published as part of the unified pymmcore-plus site,
+# composed by https://github.com/pymmcore-plus/pymmcore-plus.github.io.
+# Theme and global settings live there; this file holds what pymmcore-plus owns.
+[project]
+site_name = "pymmcore-plus"
+site_url = "https://pymmcore-plus.github.io/pymmcore-plus/"
+repo_url = "https://github.com/pymmcore-plus/pymmcore-plus"
+edit_uri = "edit/main/docs/"
+
+[project.plugins.awesome-nav]
+
+[project.plugins.api-autonav]
+modules = ["src/pymmcore_plus"]
+api_root_uri = "api"
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["src"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "numpy"
+allow_inspection = false
+preload_modules = ["pymmcore"]
+extensions = ["docs/_griffe_ext.py:PymmcoreStubs"]

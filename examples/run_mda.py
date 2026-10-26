@@ -6,7 +6,7 @@ from useq import MDAEvent, MDASequence
 
 from pymmcore_plus import CMMCorePlus
 
-# see https://pymmcore-plus.github.io/useq-schema/api/ (1)
+# see https://pymmcore-plus.github.io/useq-schema/schema/sequence/ (1)
 sequence = MDASequence(
     channels=[{"config": "DAPI", "exposure": 10}, {"config": "FITC", "exposure": 50}],
     time_plan={"interval": 1, "loops": 5},

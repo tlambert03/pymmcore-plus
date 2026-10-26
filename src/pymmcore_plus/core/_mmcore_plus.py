@@ -1634,8 +1634,8 @@ class CMMCorePlus(pymmcore.CMMCore):
         The currently registered MDAEngine (`core.mda.engine`) will be responsible for
         executing the acquisition.
 
-        After starting the sequence you can pause or cancel with the mda with
-        the mda object's `toggle_pause` and `cancel` methods.
+        After starting the sequence you can pause or cancel the mda with the
+        mda object's `set_paused` and `cancel` methods.
 
         Parameters
         ----------

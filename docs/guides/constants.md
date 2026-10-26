@@ -62,9 +62,12 @@ core = pymmcore_plus.CMMCorePlus()
 core.getDeviceType("Camera")  # <DeviceType.CameraDevice: 2>
 ```
 
--------
+!!! tip "API reference"
 
-::: pymmcore_plus.core._constants
-    options:
-        show_root_heading: false
-        show_root_toc_entry: false
+    All enumerations are documented in the [`pymmcore_plus`][] API reference,
+    for example [`DeviceType`][pymmcore_plus.DeviceType],
+    [`PropertyType`][pymmcore_plus.PropertyType],
+    [`ActionType`][pymmcore_plus.ActionType],
+    [`FocusDirection`][pymmcore_plus.FocusDirection],
+    [`PixelFormat`][pymmcore_plus.PixelFormat], and
+    [`Keyword`][pymmcore_plus.Keyword].
