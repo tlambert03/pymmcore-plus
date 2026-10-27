@@ -10,6 +10,15 @@ MSG = (
 
 
 class GeneratorMDASequence(MDASequence):
+    """Placeholder sequence used when the runner is given events, not an `MDASequence`.
+
+    When [`MDARunner.run`][pymmcore_plus.mda.MDARunner.run] receives any iterable of
+    events other than a [`useq.MDASequence`][] (a list, a generator, a queue-backed
+    iterator, a `useq.v2.MDASequence`, etc...), the shape of the experiment isn't
+    known in advance.  An empty `GeneratorMDASequence` is then passed to the
+    engine's `setup_sequence` and emitted in `sequenceStarted` in its place.
+    """
+
     axis_order: tuple[str, ...] = ()
 
     @property

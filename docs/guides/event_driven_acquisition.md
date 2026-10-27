@@ -22,10 +22,11 @@ is sometimes referred to as **event-driven acquisition**, or "smart-microscopy".
     Nat Methods 19, 1262–1267 (2022).
     [https://doi.org/10.1038/s41592-022-01589-x](https://doi.org/10.1038/s41592-022-01589-x)
 
-    2. Shi Y, Tabet JS, Milkie DE, Daugird TA, Yang CQ, Giovannucci A, Legant WR.
-    *Smart Lattice Light Sheet Microscopy for imaging rare and complex cellular events.*
-    bioRxiv. 2023 Mar 9
-    [https://doi.org/10.1101/2023.03.07.531517.](https://doi.org/10.1101/2023.03.07.531517)
+    2. Shi Y, Tabet JS, Milkie DE, Daugird TA, Yang CQ, Ritter AT, Giovannucci A,
+    Legant WR.
+    *Smart lattice light-sheet microscopy for imaging rare and complex cellular events.*
+    Nat Methods 21, 301–310 (2024).
+    [https://doi.org/10.1038/s41592-023-02126-0](https://doi.org/10.1038/s41592-023-02126-0)
 
 Obviously, in this case, you can't just create a list of `useq.MDAEvent` objects
 and pass them to the acquisition engine, since that list needs to change based
@@ -45,11 +46,12 @@ import useq
 
 
 class MDARunner:
-    def run(self, events: Iterable[useq.MDAEvent]) -> None: ...
+    def run(self, events: Iterable[useq.MDAEvent], **kwargs) -> None: ...
 ```
 
-:eyes: **The `run` method expects an _iterable_ of `useq.MDAEvent`
-objects.** :eyes:
+!!! tip ""
+
+    The `run` method expects an _iterable_ of `useq.MDAEvent` objects.
 
 !!! question "Iterable"
 
@@ -63,7 +65,7 @@ objects.** :eyes:
     [`Queue`][queue.Queue] can easily be converted to an iterator as well, as we'll
     see below.
 
-## Useful Iterables
+## Useful iterables
 
 Many python objects are iterable. Let's look at a few types of iterables that
 can be used to implement event-driven acquisition in pymmcore-plus.
@@ -73,7 +75,7 @@ can be used to implement event-driven acquisition in pymmcore-plus.
 [Generators](https://docs.python.org/3/glossary.html#term-generator) are
 functions that contain `yield` statements. When called, they return a [generator
 iterator](https://docs.python.org/3/glossary.html#term-generator-iterator) that
-can be used to iterate over the values yielded by the generator function. 
+can be used to iterate over the values yielded by the generator function.
 
 !!! question "Say what?"
 
@@ -126,7 +128,7 @@ def my_events() -> Iterator[useq.MDAEvent]:
             for _ in range(5):
                 yield useq.MDAEvent(metadata={"bursting": True})
         elif i > 5:
-            # stop after 5 events
+            # stop after a few rounds
             # (just an example of some stop condition)
             return
         else:
@@ -188,12 +190,10 @@ core.run_mda(my_events())
 
 ### Queues
 
-Python's [`Queue`][queue.Queue] class is useful for managing and synchronizing
-data between multiple threads or processes. It ensures orderly execution and
-prevents race conditions. Generally, a Queue is passed between threads or
-processes, and one thread or process
+Python's [`Queue`][queue.Queue] class is a thread-safe way to pass data between
+threads.  Generally, a Queue is shared between threads, and one thread
 [puts](https://docs.python.org/3/library/queue.html#queue.Queue.put) data (such
-as an `MDAEvent` to execute) into the queue, while another thread or process
+as an `MDAEvent` to execute) into the queue, while another thread
 [gets](https://docs.python.org/3/library/queue.html#queue.Queue.get) data out of
 the queue.
 
@@ -245,15 +245,15 @@ q = Queue()  # create the queue
 STOP = object()  # any object can serve as the sentinel
 q_iterator = iter(q.get, STOP)  # create the queue-backed iterable
 
-# start the acquisition in a separate thread
-core.run_mda(q_iterator)
 
-
-# (optional) connect some callback to the imageReady signal
+# (optional) connect some callback to the frameReady signal
 @core.mda.events.frameReady.connect
 def on_frame(img, event):
     print(f"Frame {event.index} received: {img.shape}")
 
+
+# start the acquisition in a separate thread
+core.run_mda(q_iterator)
 
 # now we can put events into the queue
 # according to whatever logic we want:
@@ -302,7 +302,7 @@ when the condition is met (saving us from constructing the events
 manually)
 
 ```python
-# example usage in the
+# in the generator example above:
 def my_events() -> Iterator[useq.MDAEvent]:
     while True:
         if some_condition_is_met():
@@ -320,3 +320,23 @@ queue:
 for event in my_sequence:
     q.put(event)
 ```
+
+## Things to keep in mind
+
+A few things to keep in mind when you pass the runner an *iterator* (a
+generator, or `iter(queue.get, STOP)`) instead of a list or an `MDASequence`:
+
+- The engine can't look ahead, so events are never merged into
+  [hardware-triggered sequences](mda_engine.md#hardware-triggered-sequences).
+- The shape of the data isn't known in advance, so if you pass `output=`, the
+  frames are written into one flat `(t, y, x)` stack, in the order they were
+  acquired (see [Saving Data](saving_data.md#lists-and-generators-are-saved-as-a-flat-stack)).
+- `min_start_time` is measured from the start of the run, or from the last event
+  that had `reset_event_timer=True`.  So to start an event "5 seconds after
+  *this* one started", set `reset_event_timer=True` on this event, and
+  `min_start_time=5` on the next.
+- `frameReady` callbacks run in the acquisition thread (with the default psygnal
+  backend), and the next event waits for them.  If deciding on the next event
+  takes a while, do that work in another thread (the `Controller` in the
+  example above only stores the image in its callback, and analyzes it in the
+  main thread).  See [Threads](events.md#threads).

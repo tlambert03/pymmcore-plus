@@ -18,34 +18,34 @@ DevPropTuple: TypeAlias = tuple[str, str]
 class Configuration(pymmcore.Configuration):
     """Encapsulation of configuration information.
 
-    This is the type of object returned by default (provided `native==False`) by:
-    [`getConfigData][pymmcore_plus.CMMCorePlus.getConfigData],
-    [`getPixelSizeConfigData][pymmcore_plus.CMMCorePlus.getPixelSizeConfigData]
-    [`getSystemState][pymmcore_plus.CMMCorePlus.getSystemState]
-    [`getSystemStateCache][pymmcore_plus.CMMCorePlus.getSystemStateCache]
-    [`getConfigState][pymmcore_plus.CMMCorePlus.getConfigState]
-    [`getConfigGroupState][pymmcore_plus.CMMCorePlus.getConfigGroupState]
-    [`getConfigGroupStateFromCache][pymmcore_plus.CMMCorePlus.getConfigGroupStateFromCache]
+    This is the type of object returned by default (provided `native=False`) by
+    [`getConfigData`][pymmcore_plus.CMMCorePlus.getConfigData],
+    [`getPixelSizeConfigData`][pymmcore_plus.CMMCorePlus.getPixelSizeConfigData],
+    [`getSystemState`][pymmcore_plus.CMMCorePlus.getSystemState],
+    [`getSystemStateCache`][pymmcore_plus.CMMCorePlus.getSystemStateCache],
+    [`getConfigState`][pymmcore_plus.CMMCorePlus.getConfigState],
+    [`getConfigGroupState`][pymmcore_plus.CMMCorePlus.getConfigGroupState] and
+    [`getConfigGroupStateFromCache`][pymmcore_plus.CMMCorePlus.getConfigGroupStateFromCache].
 
-
-    This class is a subclass of `pymmcore.Configuration` that implements an
-    [`collections.abc.MutableSequence`][] (i.e. it behaves like a Python list).
-    It also behaves much like a [`collections.abc.MutableMapping`][], where the keys
-    are 2-tuples of (deviceLabel, propertyLabel) and the values are the property values.
+    This class is a subclass of `pymmcore.Configuration`.  It can be indexed like a
+    mapping, with `(deviceLabel, propertyLabel)` keys (`cfg["Camera", "Exposure"]`,
+    `cfg["Camera", "Exposure"] = "10"`, `del cfg["Camera", "Exposure"]`), and it has
+    a few list-like methods (`append`, `extend`, `remove`).  Iterating over it yields
+    `(deviceLabel, propertyLabel, value)` 3-tuples.  (It is *not* a full
+    `MutableMapping`: there are no `keys()`, `values()` or `items()` methods.  Use
+    [`dict`][pymmcore_plus.Configuration.dict] or
+    [`html`][pymmcore_plus.Configuration.html] for other views.)
 
     Note that the "order" of this collection is not well-defined, so while you *can*
-    index with an integer, you should not rely on the order of the items in the
-    collection.  `__getitem__/__setitem__/__delitem__` all accept a 2-tuple of
-    `(deviceLabel, propertyLabel)`.
-
-    It adds a few convenience methods:
+    index with an integer (which returns a `pymmcore.PropertySetting`), you should not
+    rely on the order of the items in the collection.
 
     !!! tip
 
         All of the methods in `pymmcore_plus.CMMCorePlus` that would have returned a
         `pymmcore.Configuration` in `pymmcore` (e.g.
         [`getConfigData`][pymmcore_plus.CMMCorePlus.getConfigData],
-        [`getConfigState`][pymmcore_plus.CMMCorePlus.getConfigState], etc...).
+        [`getConfigState`][pymmcore_plus.CMMCorePlus.getConfigState], etc...)
         have been reimplemented to return a `pymmcore_plus.Configuration` object. This
         object has the same API as `pymmcore.Configuration`, but you can request a
         "native" (unenhanced) `pymmcore` object by passing `native=True` to the method.

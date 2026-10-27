@@ -1,3 +1,10 @@
+"""`CMMCorePlus` and its supporting classes.
+
+This includes the object-oriented views onto devices, properties and config
+groups, the enums that replace pymmcore's integer constants, and hardware
+sequencing helpers.
+"""
+
 __all__ = [
     "ActionType",
     "AutoFocusDevice",

@@ -154,12 +154,17 @@ class MDARunner:
 
     This object is available at [`CMMCorePlus.mda`][pymmcore_plus.CMMCorePlus.mda].
 
-    This is the main object that runs a multi-dimensional experiment; it does so by
-    driving an acquisition engine that implements the
+    This is the main object that runs a multi-dimensional experiment (the "runner").
+    It iterates over the events, waits until each one is due (`min_start_time`),
+    handles pausing and cancelling, and sends the acquired frames to the `output`
+    (if any).  The hardware itself is driven by an acquisition engine (the
+    [`engine`][pymmcore_plus.mda.MDARunner.engine], by default an
+    [`MDAEngine`][pymmcore_plus.mda.MDAEngine]) that implements the
     [`PMDAEngine`][pymmcore_plus.mda.PMDAEngine] protocol.  It emits signals at specific
     times during the experiment (see
     [`PMDASignaler`][pymmcore_plus.mda.events.PMDASignaler] for details on the signals
-    that are available to connect to and when they are emitted).
+    that are available to connect to and when they are emitted).  See [The
+    Acquisition Engine][the-acquisition-engine] for a guide.
 
     The state machine modeled by this runner is as follows:
 
@@ -352,7 +357,7 @@ class MDARunner:
 
         !!!important
 
-            If `output` is a sequence, it may contain nor more than one
+            If `output` is a sequence, it may contain no more than one
             `str | Path | AcquisitionSettings`.
 
         Parameters
@@ -369,9 +374,9 @@ class MDARunner:
                 [`ome_writers.AcquisitionSettings`][], and the extension can be used
                 to determine the file format to create:
                 - `[.ome].zarr` will result in an OME-Zarr at the specified path
-                - `[.ome].tiff` will result in an OME-TIFF at the specified, or, if
-                  multiple positions are acquired, the output path will be treated as a
-                  directory with individual OME-TIFF files for each position.
+                - `[.ome].tiff` will result in an OME-TIFF at the specified path, or,
+                  if multiple positions are acquired, the output path will be treated
+                  as a directory with individual OME-TIFF files for each position.
 
             1. An [`ome_writers.AcquisitionSettings`][], object which allows full
               control over many parameters.  See [ome_writers
@@ -379,11 +384,16 @@ class MDARunner:
               details.
 
             1. A handler object that implements the `DataHandler` protocol, currently
-              meaning it has a `frameReady` method.  See `mda_listeners_connected`
-              for more details.
+              meaning it has a `frameReady` method.  Handlers are called from a
+              separate thread, so they don't block the acquisition.  See
+              `mda_listeners_connected` for more details.
 
             During the course of the sequence, the `get_view` method can be used to get
             an array-like view of the current data sink, if the sink supports it.
+
+            The array shape is taken from `events` when it is a `useq.MDASequence`.
+            Any other iterable of events is written as a flat `(t, y, x)` stack.  See
+            [Saving Data][saving-data] for details.
 
         overwrite : bool, optional
             Whether to overwrite existing files *when output is a `str` or `Path`*.
@@ -431,6 +441,10 @@ class MDARunner:
     )
     def get_output_handlers(self) -> tuple[SupportsFrameReady, ...]:
         """Return the data handlers that are currently connected.
+
+        !!! warning "Deprecated"
+            There is no full replacement.  To look at the data while it is being
+            acquired, use [`get_view`][pymmcore_plus.mda.MDARunner.get_view].
 
         Output handlers are connected by passing them to the `output` parameter of the
         `run` method; the run method accepts objects with a `frameReady` method *or*

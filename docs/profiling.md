@@ -1,13 +1,12 @@
 # Performance Profiling
 
-Identifying performance bottlenecks is an important part of the development
-process. MMCore coordinates control of many different devices, each of which may
-have its own performance characteristics. As a result, performance issues can
-vary dramatically depending on the specific hardware configuration and the
-operations being performed.
+This page covers a few tools for finding out where the time goes when you use
+pymmcore-plus.  Every device behaves differently, so slowdowns depend a lot on
+your hardware and on what you're doing with it: measure on your own setup.
 
-This document provides an overview of some tools and techniques that can be used
-to identify and address performance bottlenecks when using pymmcore-plus
+If you just want a quick look at how long common core and device calls take
+with your hardware, `mmcore bench` runs a short benchmark (with the demo
+configuration, or your own with `--config my.cfg`) and prints a table of timings.
 
 ## Profiling with py-spy
 
@@ -24,13 +23,13 @@ as instantiating a CMMCorePlus object, loading a configuration, and performing
 some task such as running a multi-dimensional acquisition.  Save this script
 somewhere (we'll call it `example.py`) and profile it with `py-spy`:
 
-<small><em>Note: py-spy will require sudo access</em></small>
+<small><em>Note: on macOS, py-spy requires sudo access</em></small>
 
 ```sh
 sudo py-spy record -o profile.json -f speedscope -r 1000 -- python example.py
 ```
 
-- the `-o profile` flag specifies the output file name
+- the `-o profile.json` flag specifies the output file name
 - the `-f speedscope` flag specifies the output format.  Here, we use the
   `speedscope` format, which can be viewed in the [Speedscope](https://www.speedscope.app/)
   web viewer.
@@ -53,7 +52,7 @@ seq = MDASequence(
     z_plan={"range": 4, "step": 0.5},
     axis_order="tpcz",
 )
-seq_json = sequence.model_dump_json(exclude_unset=True)
+seq_json = seq.model_dump_json(exclude_unset=True)
 
 with open("mda_seq.json", "w") as f:
     f.write(seq_json)
@@ -66,7 +65,8 @@ sudo py-spy record -o profile.json -f speedscope -r 1000 -- mmcore run mda_seq.j
 ```
 
 - the `-o`, `-f`, `-r`, and `--` flags are the same as in the previous example
-- the `mmcore run` command runs the acquisition specified in the json file
+- the `mmcore run` command runs the acquisition specified in the json file (it
+  doesn't save any data)
 - the `--config` flag specifies the path to the MMCore configuration file defining your microscope.
 
 ### Example attaching to a running process

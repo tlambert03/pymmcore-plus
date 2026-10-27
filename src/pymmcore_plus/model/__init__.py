@@ -1,3 +1,8 @@
+"""An in-memory model of a Micro-Manager configuration.
+
+This can be used to read, edit and write `.cfg` files without loading any devices.
+"""
+
 from ._config_group import ConfigGroup, ConfigPreset, Setting
 from ._core_device import CoreDevice
 from ._device import AvailableDevice, Device

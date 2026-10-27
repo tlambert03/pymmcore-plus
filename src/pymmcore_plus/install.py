@@ -1,3 +1,5 @@
+"""Download and install Micro-Manager device adapters (see `mmcore install`)."""
+
 from __future__ import annotations
 
 import json

@@ -22,6 +22,7 @@ import griffe
 import pymmcore
 
 from pymmcore_plus import CMMCorePlus
+from pymmcore_plus._discovery import USER_DATA_MM_PATH
 
 DOCS = Path(__file__).parent
 OUT = DOCS / "_generated"
@@ -31,10 +32,11 @@ from _griffe_ext import PymmcoreStubs  # noqa: E402
 SKIP = {"this", "thisown"}  # SWIG internals
 
 # (category, pattern) -- first match wins, so order matters.
+# (The order in which sections are *shown* is SECTION_ORDER, below.)
 CATEGORIES: list[tuple[str, str]] = [
     (
         "Acquisition engine & events",
-        r"^(mda|run_mda|register_mda_engine|events|registerCallback|setContext)$",
+        r"^(mda|run_mda|register_mda_engine|events|registerCallback)$",
     ),
     ("Pumps", r"[Pp]ump"),
     ("Galvos", r"Galvo"),
@@ -63,16 +65,42 @@ CATEGORIES: list[tuple[str, str]] = [
         "Config groups & presets",
         r"Config(?!uration)|ConfigGroup|isGroupDefined|[Cc]hannelGroup",
     ),
-    ("State devices", r"State(?!Cache)|Label|NumberOfStates|[Oo]bjective"),
-    (
-        "System state & configuration files",
-        r"[Ss]ystem(?!Busy)|^state$|^describe$|^reset$|Version",
-    ),
+    ("System state & config files", r"[Ss]ystem(?!Busy)|^setContext$"),
+    ("State devices", r"^(get|set)State|StateLabel|NumberOfStates|[Oo]bjective"),
+    ("General", r"^(instance|reset|describe|state|noop|sleep)$|Version"),
     ("Properties", r"Property|Properties"),
-    ("Devices", r"Device|Adapter|Library|[Ii]nitializ|Busy|waitFor|Timeout|Delay"),
+    (
+        "Devices",
+        r"Device|Adapter|Library|[Ii]nitializ|Busy|waitFor|Timeout|Delay|ParentLabel",
+    ),
     ("Logging & errors", r"[Ll]og|Error|Feature|[Dd]ebug|[Ss]tderr"),
     ("Other", r""),
 ]
+
+# reading order for the member sections (and the page's table of contents)
+SECTION_ORDER = [
+    "General",
+    "Acquisition engine & events",
+    "System state & config files",
+    "Devices",
+    "Properties",
+    "Config groups & presets",
+    "Cameras",
+    "Images & buffer",
+    "Stages",
+    "Shutters",
+    "State devices",
+    "Autofocus",
+    "Pixel size",
+    "Hardware sequencing",
+    "Logging & errors",
+    "SLMs",
+    "Galvos",
+    "Serial ports",
+    "Pumps",
+    "Other",
+]
+assert sorted(SECTION_ORDER) == sorted(c for c, _ in CATEGORIES)
 
 ORIGIN_ICON = {"added": "\u2728", "overridden": "\u2795", "inherited": ""}
 ORIGIN_TITLE = {
@@ -104,6 +132,12 @@ def _first_paragraph(text: str) -> str:
     return " ".join(line.strip() for line in para.splitlines())
 
 
+def _summary(doc: str) -> str:
+    summary = _first_paragraph(WHY_OVERRIDE.sub("", doc))
+    # a summary written entirely in italics (e.g. registerCallback's) reads as noise
+    return re.sub(r"^\*([^*]+)\*$", r"\1", summary)
+
+
 def _inline_html(text: str) -> str:
     """Escape text, drop Markdown link syntax, and render `code` spans."""
     text = re.sub(r"\[([^\]]+)\]\[[^\]]*\]|\[([^\]]+)\]\([^)]*\)", r"\1\2", text)
@@ -111,11 +145,24 @@ def _inline_html(text: str) -> str:
     return "".join(f"<code>{p}</code>" if i % 2 else p for i, p in enumerate(parts))
 
 
+_VARIADIC = {
+    griffe.ParameterKind.var_positional: "*",
+    griffe.ParameterKind.var_keyword: "**",
+}
+
+
 def _signature(obj: griffe.Object) -> str:
     if not isinstance(obj, griffe.Function):
         return ""
-    params = [p.name for p in obj.parameters if p.name != "self"]
-    sig = f"({', '.join(params)})"
+    params = list(obj.parameters)
+    if params and params[0].name in ("self", "cls"):
+        params = params[1:]
+    # `def f(self, *args)` with typed overloads: show the first overload instead
+    if obj.overloads and all(p.kind in _VARIADIC for p in params):
+        params = [p for p in obj.overloads[0].parameters if p.name != "self"]
+    names = [_VARIADIC.get(p.kind, "") + p.name for p in params]
+    # `*_` and `**_kwargs` are placeholders, not real parameters
+    sig = f"({', '.join(n for n in names if not n.lstrip('*').startswith('_'))})"
     if n := len(obj.overloads or ()):
         sig += f" <small>({n} overloads)</small>"
     return sig
@@ -150,7 +197,7 @@ def method_rows() -> list[dict[str, str]]:
                 "origin": origin,
                 "category": _category(name),
                 "deprecated": "true" if deprecated else "false",
-                "summary": _first_paragraph(WHY_OVERRIDE.sub("", doc)),
+                "summary": _summary(doc),
                 "why": " ".join(why.group(1).split()) if why else "",
                 "signature": _signature(obj) if obj is not None else "",
                 "kind": obj.kind.value if obj is not None else "attribute",
@@ -173,14 +220,17 @@ def write_table(rows: list[dict[str, str]]) -> str:
     for r in rows:
         anchor = f"pymmcore_plus.CMMCorePlus.{r['name']}"
         title = ORIGIN_TITLE[r["origin"]]
-        if r["why"]:
-            title += f" — {r['why']}"
         origin = (
             f'<span class="pymm-origin pymm-origin--{r["origin"]}" '
             f'title="{html.escape(title)}">{ORIGIN_ICON[r["origin"]]}</span>'
         )
         sig = (
             f'<span class="pymm-sig">{r["signature"]}</span>' if r["signature"] else ""
+        )
+        why = (
+            f"<br><small><em>Why override?</em> {_inline_html(r['why'])}</small>"
+            if r["why"]
+            else ""
         )
         out.append(
             f'<tr data-origin="{r["origin"]}" data-category="{_slug(r["category"])}" '
@@ -189,7 +239,7 @@ def write_table(rows: list[dict[str, str]]) -> str:
             f"<td>{origin}</td>"
             f'<td><a href="#cmmcoreplus-{_slug(r["category"])}">'
             f"{r['category']}</a></td>"
-            f"<td>{_inline_html(r['summary'])}</td></tr>"
+            f"<td>{_inline_html(r['summary'])}{why}</td></tr>"
         )
     out += ["</tbody>", "</table>", ""]
     return "\n".join(out)
@@ -197,7 +247,7 @@ def write_table(rows: list[dict[str, str]]) -> str:
 
 def write_members(rows: list[dict[str, str]]) -> str:
     out: list[str] = []
-    for category, _ in CATEGORIES:
+    for category in SECTION_ORDER:
         names = [r["name"] for r in rows if r["category"] == category]
         if not names:
             continue
@@ -228,6 +278,14 @@ def write_cli() -> None:
     md = re.sub(r" \(v[^)]*\)", "", md, count=1)
     # demote headings so the page's own h1 stays the only h1
     md = re.sub(r"^(#+) ", lambda m: "#" + m.group(1) + " ", md, flags=re.MULTILINE)
+    # typer escapes <https://...> autolinks from docstrings: restore them
+    md = re.sub(r"&lt;(https?://[^&\s]+)&gt;", r"<\1>", md)
+    # don't publish the build machine's home directory as the default --dest
+    md = md.replace(str(USER_DATA_MM_PATH), "&lt;user data dir&gt;/pymmcore-plus/mm")
+    # the command summaries are truncated by typer, and the TOC lists them anyway
+    md = re.sub(r"\*\*Commands\*\*:\n\n(\* .*\n)+\n?", "", md)
+    # nest the `--channel` examples under their option
+    md = re.sub(r"^ - ", "    - ", md, flags=re.MULTILINE)
     (OUT / "cli.md").write_text(md, encoding="utf-8")
     logs = subprocess.check_output(
         [mmcore, "logs", "--help"], env=env, text=True, encoding="utf-8"

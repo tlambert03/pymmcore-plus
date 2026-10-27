@@ -112,9 +112,15 @@ def std_to_builtins(obj: Any) -> Any:
 
 if msgspec is None:  # pragma: no cover
     json_dumps = std_json_dumps
+    """Serialize `obj` (e.g. a metadata dict) to JSON bytes."""
     json_loads = std_json_loads
+    """Deserialize JSON bytes (or a string) to Python objects."""
     to_builtins = std_to_builtins
+    """Convert `obj` (e.g. a metadata dict) to builtin Python types."""
 else:
     json_dumps = msgspec_json_dumps
+    """Serialize `obj` (e.g. a metadata dict) to JSON bytes."""
     json_loads = msgspec_json_loads
+    """Deserialize JSON bytes (or a string) to Python objects."""
     to_builtins = msgspec_to_builtins
+    """Convert `obj` (e.g. a metadata dict) to builtin Python types."""

@@ -56,7 +56,7 @@ class PCoreSignaler(Protocol):
 
     The main instance of this interface is available on the `CMMCorePlus` object at the
     [`events`][pymmcore_plus.CMMCorePlus.events] attribute. Each signal on `events` is
-    an object has a `connect` and a `disconnect` method that you can use to
+    an object that has a `connect` and a `disconnect` method that you can use to
     connect/disconnect your own callback functions.  `connect` and `disconnect` accept a
     single argument, which is a callable that will be called when the signal is emitted.
     The callable should accept no more positional arguments than the signal emits (noted
@@ -65,7 +65,7 @@ class PCoreSignaler(Protocol):
     !!! note
 
         These events are a superset of those emitted by
-        [MMEventCallback](https://valelab4.ucsf.edu/~MM/doc/mmcorej/mmcorej/MMEventCallback.html)
+        [MMEventCallback](https://micro-manager.org/apidoc/mmcorej/latest/mmcorej/MMEventCallback.html)
         in the MMCore C++ library.  The "on" prefix has been removed from the names
         here and the first letter lower cased.
 
@@ -94,7 +94,7 @@ class PCoreSignaler(Protocol):
         print(f"Exposure changed for {device} to {new_exposure}")
 
 
-    core.events.exposureChanged.connect(my_callback)
+    core.events.exposureChanged.connect(on_exposure_changed)
     ```
 
     Events may also be connected as a decorator:
@@ -138,17 +138,14 @@ class PCoreSignaler(Protocol):
 
     # added for CMMCorePlus
     configSet: ClassVar[PSignal]
-    """Emits `(str, str)` when a config has been set.
+    """Emits `(groupName: str, configName: str)` when a config has been set.
 
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """
     imageSnapped: ClassVar[PSignal]
-    """Emits with no arguments whenever snap is called.
-
-    > :sparkles: This signal is unique to `pymmcore-plus`.
-    """
+    """Emits `(cameraLabel: str)` whenever `snapImage` is called."""
     mdaEngineRegistered: ClassVar[PSignal]
-    """Emits `(MDAEngine, MDAEngine)` when an MDAEngine is registered.
+    """Emits `(newEngine, oldEngine)` when an MDAEngine is registered.
 
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """
@@ -164,53 +161,50 @@ class PCoreSignaler(Protocol):
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """
     sequenceAcquisitionStarting: ClassVar[PSignal]
-    """Emits `(str,)` *before* sequence acquisition is started.
+    """Emits `(cameraLabel: str)` *before* sequence acquisition is started.
 
     !!! critical "Breaking Change"
         In `pymmcore-plus` version 0.16.0, the `sequenceAcquisitionStarting` signal
         was *reduced* from `(str, int, float, bool)` to `(str,)` to match the signature
         emitted by the C++ MMCore library.
 
-    `(cameraLabel,)`
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """
     sequenceAcquisitionStarted: ClassVar[PSignal]
-    """Emits `(str)` *after* sequence acquisition has started.
+    """Emits `(cameraLabel: str)` *after* sequence acquisition has started.
 
     !!! critical "Breaking Change"
         In `pymmcore-plus` version 0.16.0, the `sequenceAcquisitionStarted` signal
         was *reduced* from `(str, int, float, bool)` to `(str,)` to match the signature
         emitted by the C++ MMCore library.
-
-    (cameraLabel,)
-    > :sparkles: This signal is unique to `pymmcore-plus`.
     """
     sequenceAcquisitionStopped: ClassVar[PSignal]
-    """Emits `(str)` when sequence acquisition is stopped.
+    """Emits `(cameraLabel: str)` when sequence acquisition is stopped."""
+    autoShutterSet: ClassVar[PSignal]
+    """Emits `(state: bool)` when the auto shutter setting is changed.
 
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """
-    autoShutterSet: ClassVar[PSignal]
-    """Emits `(bool)` when the auto shutter setting is changed.
-
-    """
     configGroupDeleted: ClassVar[PSignal]
-    """Emits `(str)` when a config group is deleted.
+    """Emits `(groupName: str)` when a config group is deleted.
 
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """
     configDeleted: ClassVar[PSignal]
-    """Emits `(str, str)` when a config is deleted.
+    """Emits `(groupName: str, configName: str)` when a config is deleted.
 
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """
     configDefined: ClassVar[PSignal]
     """Emits `(str, str, str, str, str)` when a config is defined.
 
+    The arguments are `(groupName, configName, deviceLabel, propName, value)`.  The
+    last three are empty strings when an empty preset is defined.
+
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """
     roiSet: ClassVar[PSignal]
-    """Emits `(str, int, int, int, int)` when an ROI is set.
+    """Emits `(cameraLabel: str, x, y, width, height)` when an ROI is set.
 
     > :sparkles: This signal is unique to `pymmcore-plus`.
     """

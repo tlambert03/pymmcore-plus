@@ -4,8 +4,9 @@ All of the constants in the `pymmcore` library are in the top level
 `pymmcore` namespace, making it a bit difficult to know what type
 or enumeration they refer to.
 
-All of these constants are reimplemened in the `pymmcore_plus` library
-as [`enum.IntEnum`][] and are available in the `pymmcore_plus` namespace.
+All of these constants are reimplemented in the `pymmcore_plus` library
+as enums ([`enum.IntEnum`][] or [`enum.StrEnum`][]) and are available in the
+`pymmcore_plus` namespace (and are listed below).
 
 For example, the integer corresponding to the `AfterLoadSequence` action type
 could be accessed as `pymmcore.AfterLoadSequence` or
@@ -62,12 +63,68 @@ core = pymmcore_plus.CMMCorePlus()
 core.getDeviceType("Camera")  # <DeviceType.CameraDevice: 2>
 ```
 
-!!! tip "API reference"
+::: pymmcore_plus.DeviceType
+    options:
+      heading_level: 2
+      show_root_full_path: false
+      summary: false
 
-    All enumerations are documented in the [`pymmcore_plus`][] API reference,
-    for example [`DeviceType`][pymmcore_plus.DeviceType],
-    [`PropertyType`][pymmcore_plus.PropertyType],
-    [`ActionType`][pymmcore_plus.ActionType],
-    [`FocusDirection`][pymmcore_plus.FocusDirection],
-    [`PixelFormat`][pymmcore_plus.PixelFormat], and
-    [`Keyword`][pymmcore_plus.Keyword].
+::: pymmcore_plus.PropertyType
+    options:
+      heading_level: 2
+      show_root_full_path: false
+      summary: false
+
+::: pymmcore_plus.FocusDirection
+    options:
+      heading_level: 2
+      show_root_full_path: false
+      summary: false
+
+::: pymmcore_plus.ActionType
+    options:
+      heading_level: 2
+      show_root_full_path: false
+      summary: false
+
+::: pymmcore_plus.PortType
+    options:
+      heading_level: 2
+      show_root_full_path: false
+      summary: false
+
+::: pymmcore_plus.DeviceDetectionStatus
+    options:
+      heading_level: 2
+      show_root_full_path: false
+      summary: false
+
+::: pymmcore_plus.DeviceInitializationState
+    options:
+      heading_level: 2
+      show_root_full_path: false
+      summary: false
+
+::: pymmcore_plus.PixelFormat
+    options:
+      heading_level: 2
+      show_root_full_path: false
+      summary: false
+
+::: pymmcore_plus.Keyword
+    options:
+      heading_level: 2
+      show_root_full_path: false
+      summary: false
+
+::: pymmcore_plus.CFGCommand
+    options:
+      heading_level: 2
+      show_root_full_path: false
+      summary: false
+
+::: pymmcore_plus.CFGGroup
+    options:
+      heading_level: 2
+      show_root_full_path: false
+      summary: false

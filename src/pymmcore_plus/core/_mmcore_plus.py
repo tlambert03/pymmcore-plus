@@ -174,6 +174,18 @@ _instance: weakref.ref[CMMCorePlus] | None = None
 class CMMCorePlus(pymmcore.CMMCore):
     """Wrapper for CMMCore with extended functionality.
 
+    `CMMCorePlus` is a subclass of `pymmcore.CMMCore` with additional functionality,
+    and some overrides for the sake of convenience or fixed behavior.  It aims to be
+    a drop-in replacement.  Most methods behave as they do in `CMMCore`, but many
+    return enums or [`Configuration`][pymmcore_plus.Configuration] objects instead of
+    plain integers and SWIG objects, and many setters emit
+    [`events`][pymmcore_plus.CMMCorePlus.events] even when the device adapter
+    doesn't.  Additions include an acquisition engine
+    ([`run_mda`][pymmcore_plus.CMMCorePlus.run_mda]) and object-oriented views onto
+    devices, properties and config groups (e.g.
+    [`getDeviceObject`][pymmcore_plus.CMMCorePlus.getDeviceObject]).
+    (`registerCallback` is disallowed; use `events` instead.)
+
     Parameters
     ----------
     mm_path : str | None, optional
@@ -308,7 +320,7 @@ class CMMCorePlus(pymmcore.CMMCore):
     def events(self) -> PCoreSignaler:
         """Signaler for core events.
 
-        :sparkles: *This method is new in `CMMCorePlus`.*
+        :sparkles: *This attribute is new in `CMMCorePlus`.*
 
         This attribute allows connecting callbacks to various events that occur within
         the core. See [`pymmcore_plus.core.events.PCoreSignaler`][] documentation for
@@ -485,13 +497,13 @@ class CMMCorePlus(pymmcore.CMMCore):
     def getDeviceType(self, label: str) -> DeviceType:
         """Return device type for a given device.
 
-        **Why Override?** The returned [`pymmcore_plus.Device`][] enum is more
+        **Why Override?** The returned [`pymmcore_plus.DeviceType`][] enum is more
         interpretable than the raw `int` returned by `pymmcore`
         """
         return DeviceType(super().getDeviceType(label))
 
     def getFocusDirection(self, stageLabel: str) -> FocusDirection:
-        """Return device type for a given device.
+        """Return the focus direction of a stage.
 
         **Why Override?** The returned [`pymmcore_plus.FocusDirection`][] enum is more
         interpretable than the raw `int` returned by `pymmcore`
@@ -1416,7 +1428,7 @@ class CMMCorePlus(pymmcore.CMMCore):
     def objective_device_pattern(self) -> Pattern:
         """Pattern used to guess objective device labels.
 
-        :sparkles: *This property is new in `CMMCorePlus`.
+        :sparkles: *This property is new in `CMMCorePlus`.*
 
         It is the regex used by
         [`guessObjectiveDevices`][pymmcore_plus.CMMCorePlus.guessObjectiveDevices] to
@@ -1443,7 +1455,7 @@ class CMMCorePlus(pymmcore.CMMCore):
     def channelGroup_pattern(self) -> Pattern:
         """The regex pattern used to identify channel groups.
 
-        :sparkles: *This property is new in `CMMCorePlus`.
+        :sparkles: *This property is new in `CMMCorePlus`.*
 
         It is the regex used by
         [`getOrGuessChannelGroup`][pymmcore_plus.CMMCorePlus.getOrGuessChannelGroup] to
@@ -1597,7 +1609,7 @@ class CMMCorePlus(pymmcore.CMMCore):
     def snapImage(self) -> None:
         """Acquires a single image with current settings.
 
-        **Why Override?** to emit the `imageSnapped` event after snapping an image.
+        **Why Override?** To emit the `imageSnapped` event after snapping an image,
         and to emit shutter property changes if `getAutoShutter` is `True`.
         """
         if (autoshutter := self.getAutoShutter()) and (
@@ -1615,7 +1627,7 @@ class CMMCorePlus(pymmcore.CMMCore):
     def mda(self) -> MDARunner:
         """Return the `MDARunner` for this `CMMCorePlus` instance.
 
-        :sparkles: *This method is new in `CMMCorePlus`.*
+        :sparkles: *This attribute is new in `CMMCorePlus`.*
         """
         return self._mda_runner
 
@@ -1643,15 +1655,22 @@ class CMMCorePlus(pymmcore.CMMCore):
             An iterable of [useq.MDAEvent][] to execute.  This may be an instance
             of [useq.MDASequence][], or any other iterable of [useq.MDAEvent][].
         output : SingleOutput | Sequence[SingleOutput] | None, optional
-            The output handler(s) to use.  If None, no output will be saved.
-            "SingleOutput" can be any of the following:
+            Where to send the data.  If None (the default), nothing is saved.  This is
+            passed on to [`MDARunner.run`][pymmcore_plus.mda.MDARunner.run], which
+            describes the options in detail.  In short, it may be:
 
-            - A string or Path to a directory to save images to. A handler will be
-                created automatically based on the extension of the path.
-            - A handler object that implements the `DataHandler` protocol, currently
-                meaning it has a `frameReady` method.  See `mda_listeners_connected`
-                for more details.
-            - A sequence of either of the above. (all will be connected)
+            - A `str` or `Path` ending in `.ome.zarr` or `.ome.tiff`, which will be
+              written with [ome-writers](https://pymmcore-plus.github.io/ome-writers/).
+            - An [`ome_writers.AcquisitionSettings`][] object, for full control over
+              the output.
+            - A handler object with a `frameReady` method (connected to the
+              `frameReady` signal for the duration of the acquisition).
+            - A sequence of the above, containing no more than one path or
+              `AcquisitionSettings`.
+
+            Note that `run_mda` has no `overwrite` argument, so an existing path will
+            raise an error.  (`core.mda.run(..., overwrite=True)` accepts one, but it
+            blocks the calling thread.)
         block : bool, optional
             If True, block until the sequence is complete, by default False.
         dimension_overrides : dict[str, DimensionOverride] | None, optional
@@ -1893,7 +1912,8 @@ class CMMCorePlus(pymmcore.CMMCore):
     def startContinuousSequenceAcquisition(self, intervalMs: float = 0) -> None:
         """Start a ContinuousSequenceAcquisition.
 
-        **Why Override?** To emit a `startContinuousSequenceAcquisition` event.
+        **Why Override?** To emit the `continuousSequenceAcquisitionStarting` and
+        `continuousSequenceAcquisitionStarted` events.
         """
         self.events.continuousSequenceAcquisitionStarting.emit()
         self._do_start_continuous_sequence_acquisition(intervalMs)
@@ -1920,7 +1940,8 @@ class CMMCorePlus(pymmcore.CMMCore):
         This command does not block the calling thread for the duration of the
         acquisition.
 
-        **Why Override?** To emit a `startSequenceAcquisition` event.
+        **Why Override?** To emit the `sequenceAcquisitionStarting` and
+        `sequenceAcquisitionStarted` events.
         """
         if len(args) == 3:
             args = (self.getCameraDevice(), *args)
@@ -1939,7 +1960,7 @@ class CMMCorePlus(pymmcore.CMMCore):
 
         (for a specified camera if `cameraLabel` is provided.)
 
-        **Why Override?** To emit a `stopSequenceAcquisition` event.
+        **Why Override?** To emit a `sequenceAcquisitionStopped` event.
         """
         cameraLabel = cameraLabel or super().getCameraDevice()
         self._do_stop_sequence_acquisition(cameraLabel)
@@ -1976,13 +1997,20 @@ class CMMCorePlus(pymmcore.CMMCore):
         `setAutoFocusOffset`, may or may not do anything depending on the current
         autofocus device.
 
-        This method attempts to detect known autofocus devices and
+        This method attempts to detect known autofocus devices that have a separate
+        offset device, and for those it also sets the position of the offset device.
         """
         if offset_dev := self._getAutoFocusOffsetDevice():
             self.setPosition(offset_dev, offset)
         super().setAutoFocusOffset(offset)
 
     def getAutoFocusOffset(self) -> float:
+        """Return the current offset of the one-shot focusing device.
+
+        **Why Override?** For known autofocus devices with a separate offset device
+        (see [`setAutoFocusOffset`][pymmcore_plus.CMMCorePlus.setAutoFocusOffset]),
+        this returns the position of that offset device.
+        """
         if offset_dev := self._getAutoFocusOffsetDevice():
             return self.getPosition(offset_dev)
         return super().getAutoFocusOffset()
@@ -2461,7 +2489,15 @@ class CMMCorePlus(pymmcore.CMMCore):
     ) -> bool:
         """Check whether two [`useq.MDAEvent`][] are sequenceable by this core instance.
 
-        Micro-manager calls hardware triggering "sequencing".  Two events can be
+        !!! warning "Deprecated"
+
+            `canSequenceEvents` is deprecated.  To see how this core will combine a
+            list of events into [`SequencedEvent`][pymmcore_plus.core.SequencedEvent]
+            objects, use
+            [`iter_sequenced_events`][pymmcore_plus.core.iter_sequenced_events]:
+            `list(iter_sequenced_events(core, [e1, e2]))`.
+
+        Micro-Manager calls hardware triggering "sequencing".  Two events can be
         sequenced if *all* device properties that are changing between the first and
         second event support sequencing.
 

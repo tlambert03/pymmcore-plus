@@ -11,14 +11,15 @@ title: CMMCorePlus
 
 ## Method summary
 
-`CMMCorePlus` is a subclass of [`pymmcore.CMMCore`](https://github.com/micro-manager/pymmcore),
-so **every** method of the C++ core is available here.  The table below lists
-all of them: use the filters to see what `pymmcore-plus` adds (:sparkles:) or
-changes (:material-plus-thick:), and hover over an override to see why.
+The table below lists all of the methods of `CMMCorePlus`, including the ones it
+inherits unchanged from
+[`pymmcore.CMMCore`](https://github.com/micro-manager/pymmcore).  Use the filters
+to show only what `pymmcore-plus` adds or overrides (each override says why it was
+changed).  Deprecated methods are hidden unless you tick "show deprecated".
 
 <div class="pymm-legend" markdown>
-:sparkles: only in `CMMCorePlus` &nbsp;·&nbsp;
-:material-plus-thick: overridden by `CMMCorePlus` (hover for why) &nbsp;·&nbsp;
+✨ added by `pymmcore-plus` &nbsp;·&nbsp;
+➕ overridden &nbsp;·&nbsp;
 *no icon*: inherited unchanged from `pymmcore.CMMCore`
 </div>
 

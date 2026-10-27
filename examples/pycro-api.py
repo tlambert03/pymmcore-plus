@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
 
-    from pymmcore_plus.mda._engine import EventPayload
+    from pymmcore_plus.mda._protocol import PImagePayload
 
     Meta: TypeAlias = dict[str, Any]
     PycroEvent: TypeAlias = dict[str, Any]
@@ -54,9 +54,9 @@ class Acquisition:
     ):
         self._core = CMMCorePlus.instance()
         self._event_queue: EventQueue = Queue()
+        self._event_generation_hook_fn = event_generation_hook_fn
         self._engine_cls = _build_engine(
             self._event_queue,
-            event_generation_hook_fn,
             pre_hardware_hook_fn,
             post_hardware_hook_fn,
             post_camera_hook_fn,
@@ -64,11 +64,8 @@ class Acquisition:
         self._engine = self._engine_cls(self._core)
         self._core.mda.set_engine(self._engine)
 
-        # see https://pymmcore-plus.github.io/pymmcore-plus/guides/event_driven_acquisition/
-        iter_queue = iter(self._event_queue.get, None)
-        self._thread = self._core.run_mda(iter_queue)  # type: ignore
-        # type error because of conversion between MDAEvent and pycromanager dict.
-        # we do the conversion below in the PycroEngine class.
+        # see the "Event-Driven Acquisition" guide in the pymmcore-plus docs
+        self._thread = self._core.run_mda(self._iter_events())
 
         # we can use `mda.events.frameReady` for the image_process hooks
         self._image_process_fn = image_process_fn
@@ -97,6 +94,14 @@ class Acquisition:
 
     def mark_finished(self) -> None:
         self._event_queue.put(None)
+
+    def _iter_events(self) -> Iterator[MDAEvent]:
+        """Convert pycro-manager events from the queue into MDAEvents."""
+        for pycro_event in iter(self._event_queue.get, None):
+            hook = self._event_generation_hook_fn
+            event = _call_acq_hook(hook, pycro_event, self._event_queue)
+            if event is not None:
+                yield _pycro_to_mda_event(event)
 
     def _call_img_hook_2arg(self, img: NDArray, event: MDAEvent) -> None:
         """Call a 2-argument image processing hook."""
@@ -139,7 +144,6 @@ SKIP = "pycro_skip"  # if we should skip this event
 
 def _build_engine(
     event_queue: EventQueue,
-    event_generation_hook_fn: AcquisitionHook | None = None,
     pre_hardware_hook_fn: AcquisitionHook | None = None,
     post_hardware_hook_fn: AcquisitionHook | None = None,
     post_camera_hook_fn: AcquisitionHook | None = None,
@@ -161,21 +165,13 @@ def _build_engine(
             if pyc_event is None:
                 event.metadata[SKIP] = True
 
-        def exec_event(self, event: MDAEvent) -> EventPayload | None:
+        def exec_event(self, event: MDAEvent) -> Iterable[PImagePayload | None]:
             if event.metadata.get(SKIP):
-                return None
+                return ()
 
             result = super().exec_event(event)
             _call_acq_hook(post_camera_hook_fn, event.metadata[PYCRO_KEY], event_queue)
             return result
-
-        def event_iterator(self, events: Iterable[MDAEvent]) -> Iterator[MDAEvent]:
-            for pycro_event in iter(event_queue.get, None):
-                _event = _call_acq_hook(
-                    event_generation_hook_fn, pycro_event, event_queue
-                )
-                if _event is not None:
-                    yield _pycro_to_mda_event(_event)
 
     return PycroEngine
 
@@ -219,7 +215,7 @@ if __name__ == "__main__":
 
     with Acquisition() as acq:
         # the pymmcore-plus equivalent here is to use MDASequence
-        # https://pymmcore-plus.github.io/pymmcore-plus/guides/mda_engine/
+        # (see "The Acquisition Engine" guide in the pymmcore-plus docs)
         events = multi_d_acquisition_events(
             num_time_points=4,
             time_interval_s=2,

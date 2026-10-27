@@ -1,3 +1,16 @@
+"""Deprecated data handlers (writers) for MDA acquisitions.
+
+!!! warning "Deprecated"
+
+    This module is deprecated, and importing it emits a `FutureWarning`.  To save
+    data, pass a path ending in `.ome.zarr` or `.ome.tiff` (or an
+    [`ome_writers.AcquisitionSettings`][]) as the `output` of
+    [`MDARunner.run`][pymmcore_plus.mda.MDARunner.run], which writes with
+    [ome-writers](https://pymmcore-plus.github.io/ome-writers/) (see
+    [Saving Data][saving-data]).  These handlers will be removed in a future version;
+    if you depend on one, please copy it into your own code.
+"""
+
 from __future__ import annotations
 
 import warnings

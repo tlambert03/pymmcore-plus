@@ -1,7 +1,6 @@
 """Simple simulator demonstrating event-driven acquisitions with pymmcore-plus."""
 
 import random
-import time
 from queue import Queue
 
 import numpy as np
@@ -14,7 +13,7 @@ class Analyzer:
     """Analyzes images and returns a dict of results."""
 
     def run(self, data) -> dict:
-        # Fake analysis; randomly return a dict with a value of None 10% of the time
+        # Fake analysis; randomly return a "STOP" result 10% of the time
         if random.random() < 0.1:
             return {"result": "STOP"}
         else:
@@ -27,14 +26,14 @@ class Controller:
     def __init__(self, analyzer: Analyzer, mmc: CMMCorePlus, queue: Queue):
         self._analyzer = analyzer  # analyzer of images
         self._queue = queue  # queue of MDAEvents
-        self._results: dict = {}  # results of analysis
+        self._images: Queue[np.ndarray] = Queue()  # images waiting to be analyzed
 
         self._mmc = mmc
         mmc.mda.events.frameReady.connect(self._on_frame_ready)
 
     def _on_frame_ready(self, img: np.ndarray, event: MDAEvent) -> None:
-        # Analyze the image
-        self._results = self._analyzer.run(img)
+        # This is called in the acquisition thread: just hand the image over
+        self._images.put(img)
 
     def run(self) -> None:
         # convert the queue to an iterable
@@ -48,23 +47,19 @@ class Controller:
 
         # loop until the analyzer returns "STOP"
         while True:
-            # get the last results from the analyzer
-            result = self._results.pop("result", None)
+            # wait for the next image, and analyze it (in this thread)
+            result = self._analyzer.run(self._images.get())["result"]
 
             # Decide what to do. This is the key part of the reactive loop.
             if result == "STOP":
-                # Do nothing and return
-                print("Analyzer returned no results. Stopping...")
+                print("Analyzer says stop. Stopping...")
                 self._queue.put(self.STOP_EVENT)
                 break
-            elif result:
+            else:
                 # Adjust the exposure time based on the results and continue
                 print("Analyzer returned results. Continuing...")
                 next_event = MDAEvent(exposure=10 * result)
                 self._queue.put(next_event)
-            else:
-                # No results yet, wait a bit and check again
-                time.sleep(0.1)
 
 
 def main():

@@ -4,35 +4,22 @@
 
     This is an experimental feature, and the API may change in future releases.
 
-## A Unified controller of C++ and Pure-Python Devices
+## A unified controller of C++ and pure-Python devices
 
 The [`UniMMCore`][pymmcore_plus.experimental.unicore.UniMMCore] class is a
 subclass of [`CMMCorePlus`][pymmcore_plus.CMMCorePlus] that can control both
-"classic" C++ devices (via the CMMCore) as well pure-Python device adapters.
+"classic" C++ devices (via the CMMCore) as well as pure-Python device adapters.
 This simplifies the task of controlling new devices using pure-Python code,
 without the need to write and compile a C++ device adapter.
 
-## Overview
+The Python devices work alongside the existing C++ device adapters, and you use
+them through the same `CMMCorePlus` API.  When you call methods like
+`core.setXYPosition()` or `core.snapImage()`, UniMMCore routes the call to the
+appropriate device implementation (C++ or Python) based on which device is
+currently active.  Properties and hardware sequencing are supported for Python
+devices too.
 
-UniMMCore allows you to seamlessly mix traditional Micro-Manager C++ device
-adapters with custom Python device implementations. When you call methods like
-`core.setXYPosition()` or `core.snapImage()`, UniMMCore automatically routes the
-call to the appropriate device implementation (C++ or Python) based on which
-device is currently active.
-
-### Benefits
-
-- **Rapid Development**: Write device adapters entirely in Python, no C++
-  compilation required.
-- **Integration**: Python devices work alongside the more than 250 existing
-  C++ device adapters.
-- **Same API**: UniMMCore uses the same `CMMCorePlus` API and may be used as a
-  drop-in replacement.
-- **Full feature support**: Properties and sequences work with Python devices
-
-## Getting Started
-
-### Basic Usage
+## Getting started
 
 To use UniMMCore, replace `CMMCorePlus` with `UniMMCore`:
 
@@ -56,23 +43,24 @@ core.setCameraDevice("MyCamera")
 
 # Use the same API, UniMMCore routes to Python device automatically
 core.setExposure(100)
-img = core.snapImage()
+img = core.snap()  # or core.snapImage(), followed by core.getImage()
 ```
 
-## Supported Device Types
+## Supported device types
 
 UniMMCore currently supports the following device types for Python
-implementation:
+implementation (all of them share the [common methods](#common-methods)):
 
-- **[Common Methods](#common-methods)**
-- **[CameraDevice](#camera-devices-cameradevice)**
-- **[XYStageDevice](#xy-stage-devices-xystagedevice)**
-- **[StateDevice](#state-devices-statedevice)**
-- **[ShutterDevice](#shutter-devices-shutterdevice)**
-- **[SLMDevice](#slm-devices-slmdevice)**
-- **[GenericDevice](#generic-devices-genericdevice)**
+- [`CameraDevice`](#camera-devices-cameradevice) (and `SimpleCameraDevice`)
+- [`StageDevice`](#stage-devices-stagedevice) (single axis, e.g. focus)
+- [`XYStageDevice`](#xy-stage-devices-xystagedevice) (and `XYStepperStageDevice`)
+- [`StateDevice`](#state-devices-statedevice)
+- [`ShutterDevice`](#shutter-devices-shutterdevice)
+- [`SLMDevice`](#slm-devices-slmdevice)
+- [`HubDevice`](#hub-devices-hubdevice)
+- [`GenericDevice`](#generic-devices-genericdevice)
 
-### Common Methods
+### Common methods
 
 All device base classes inherit from
 [`Device`][pymmcore_plus.experimental.unicore.Device], and may re-implement any
@@ -111,13 +99,16 @@ class MyDevice(Device):
         """
 ```
 
-### Camera Devices (`CameraDevice`)
+### Camera devices (`CameraDevice`)
 
 For image acquisition devices. Implement the following abstract methods:
 
 ```python
-from pymmcore_plus.experimental.unicore import CameraDevice
+from collections.abc import Callable, Iterator, Sequence
+
 import numpy as np
+
+from pymmcore_plus.experimental.unicore import CameraDevice
 
 
 class MyCamera(CameraDevice):
@@ -137,19 +128,27 @@ class MyCamera(CameraDevice):
         """Return NumPy dtype of camera images."""
         pass
 
-    def start_sequence(self, n: int | None, get_buffer: Callable) -> Iterator[dict]:
-        """Start sequence acquisition yielding metadata dicts."""
+    def start_sequence(
+        self, n: int | None, get_buffer: Callable[[Sequence[int], np.dtype], np.ndarray]
+    ) -> Iterator[dict]:
+        """Acquire `n` images (or until stopped, if `n` is None).
+
+        For each image, call `get_buffer(shape, dtype)`, fill the returned array
+        in place, and then yield a metadata dict for that image.
+        """
         pass
 ```
 
-!!! warning
+`start_sequence` is used for sequence acquisitions *and* for `snapImage` (which
+is a sequence of one), so it's the only acquisition method you need to write.
 
-    `SimpleCameraDevice` is **not** recommended for real hardware cameras: a per-frame `snap()` prevents SDK-level optimizations like ring buffers and DMA transfers. Use `CameraDevice` with `start_sequence()` instead.
-
-For simple or simulated cameras, use `SimpleCameraDevice` instead — it only
-requires `sensor_shape()` and `snap()`, and provides automatic software ROI:
+For simple or simulated cameras, you can use `SimpleCameraDevice` instead.  In
+place of `shape()` and `start_sequence()`, it only needs `sensor_shape()` and
+`snap()`, and it provides software ROI for you:
 
 ```python
+import numpy as np
+
 from pymmcore_plus.experimental.unicore import SimpleCameraDevice
 
 
@@ -168,11 +167,51 @@ class MySimpleCamera(SimpleCameraDevice):
         ...
 ```
 
-### XY Stage Devices (`XYStageDevice`)
+!!! warning
+
+    `SimpleCameraDevice` is *not* recommended for real hardware cameras: a
+    per-frame `snap()` prevents SDK-level optimizations like ring buffers and DMA
+    transfers. Use `CameraDevice` with `start_sequence()` instead.
+
+### Stage devices (`StageDevice`)
+
+For single-axis stages, like a focus drive (set it as the focus device with
+`core.setFocusDevice(label)`):
+
+```python
+from pymmcore_plus.experimental.unicore import StageDevice
+
+
+class MyZStage(StageDevice):
+    def set_position_um(self, val: float) -> None:
+        """Set stage position in micrometers."""
+
+    def get_position_um(self) -> float:
+        """Get current stage position in micrometers."""
+
+    def set_origin(self) -> None:
+        """Set the current position as the origin."""
+
+    def home(self) -> None:
+        """Move stage to home position."""
+
+    def stop(self) -> None:
+        """Stop stage movement."""
+```
+
+!!! note
+
+    If you plan to save your configuration to a file (see
+    [Python devices in config files](#python-devices-in-config-files)), also
+    implement `set_focus_direction(self, sign: int)` (it may do nothing).  The
+    saved file includes a `FocusDirection` line for each stage, and the default
+    implementation raises an error when that line is loaded again.
+
+### XY stage devices (`XYStageDevice`)
 
 For controlling 2-axis positioning stages:
 
-=== "Position Motors"
+=== "Position motors"
 
     ```python
     from pymmcore_plus.experimental.unicore import XYStageDevice
@@ -204,7 +243,7 @@ For controlling 2-axis positioning stages:
             pass
     ```
 
-=== "Stepper Motor"
+=== "Stepper motor"
 
     For stepper motor stages with sequence support, use `XYStepperStageDevice`:
 
@@ -229,6 +268,14 @@ For controlling 2-axis positioning stages:
             """Get Y-axis step size in micrometers."""
             pass
 
+        def home(self) -> None:
+            """Move stage to home position."""
+            pass
+
+        def stop(self) -> None:
+            """Stop stage movement."""
+            pass
+
         # Additional methods for sequence support
         def get_sequence_max_length(self) -> int:
             """Maximum length of position sequences."""
@@ -239,7 +286,7 @@ For controlling 2-axis positioning stages:
             pass
     ```
 
-### State Devices (`StateDevice`)
+### State devices (`StateDevice`)
 
 For devices with discrete states (filter wheels, objective turrets, etc.):
 
@@ -257,7 +304,7 @@ class MyFilterWheel(StateDevice):
         pass
 ```
 
-### Shutter Devices (`ShutterDevice`)
+### Shutter devices (`ShutterDevice`)
 
 For controlling shutters or any binary open/close devices:
 
@@ -275,34 +322,27 @@ class MyShutter(ShutterDevice):
         pass
 ```
 
-### SLM Devices (`SLMDevice`)
+### SLM devices (`SLMDevice`)
 
 For Spatial Light Modulators:
 
 ```python
-from pymmcore_plus.experimental.unicore import SLMDevice
 import numpy as np
+
+from pymmcore_plus.experimental.unicore import SLMDevice
 
 
 class MySLM(SLMDevice):
-    def get_width(self) -> int:
-        """Return SLM width in pixels."""
+    def shape(self) -> tuple[int, ...]:
+        """Return (height, width) of the SLM, or (height, width, 3) for RGB."""
         pass
 
-    def get_height(self) -> int:
-        """Return SLM height in pixels."""
-        pass
-
-    def get_number_of_components(self) -> int:
-        """Return 1 for grayscale, 3 for RGB."""
-        pass
-
-    def get_bytes_per_pixel(self) -> int:
-        """Return bytes per pixel."""
+    def dtype(self) -> np.dtype:
+        """Return NumPy dtype of the SLM image (e.g. uint8)."""
         pass
 
     def set_image(self, pixels: np.ndarray) -> None:
-        """Set the image to display."""
+        """Load an image into the SLM (without displaying it yet)."""
         pass
 
     def display_image(self) -> None:
@@ -313,12 +353,32 @@ class MySLM(SLMDevice):
         """Get exposure time in milliseconds."""
         pass
 
-    def set_exposure(self, exposure_ms: float) -> None:
+    def set_exposure(self, interval_ms: float) -> None:
         """Set exposure time in milliseconds."""
         pass
 ```
 
-### Generic Devices (`GenericDevice`)
+The core derives `getSLMWidth`, `getSLMHeight`, `getSLMNumberOfComponents` and
+`getSLMBytesPerPixel` from `shape()` and `dtype()`.  To support SLM sequences,
+also override `get_sequence_max_length`, `send_sequence`, `start_sequence` and
+`stop_sequence`.
+
+### Hub devices (`HubDevice`)
+
+For a controller that has other devices attached to it.  Override
+`get_installed_peripherals()` to return `(name, description)` pairs, where each
+`name` is the name of a device class importable from the same module as the hub:
+
+```python
+from pymmcore_plus.experimental.unicore import HubDevice
+
+
+class MyHub(HubDevice):
+    def get_installed_peripherals(self) -> list[tuple[str, str]]:
+        return [("MyZStage", "Focus drive"), ("MyShutter", "Shutter")]
+```
+
+### Generic devices (`GenericDevice`)
 
 For devices that don't fit other categories but need property control:
 
@@ -331,11 +391,7 @@ class MyGenericDevice(GenericDevice):
     pass
 ```
 
-## Device Properties
-
-Python devices support the full property system. 
-
-## Defining Device Properties
+## Device properties
 
 Properties are defined either on the class using the
 [`@pymm_property`][pymmcore_plus.experimental.unicore.pymm_property] decorator,
@@ -389,7 +445,7 @@ These two methods may be freely mixed, and accept largely the same arguments.
         def _get_my_prop(self) -> int: ...
     ```
 
-### Properties with Constraints
+### Properties with constraints
 
 Properties may have value constraints such as numerical limits or
 (categorical) allowed values:
@@ -407,7 +463,7 @@ class MyStage(XYStageDevice):
         return self._step_size
 ```
 
-### Sequenceable Properties
+### Sequenceable properties
 
 In order to declare a property as "sequenceable" (i.e. supporting hardware-synchronized
 parameter changes), you must:
@@ -475,7 +531,7 @@ parameter changes), you must:
             """Tell hardware to stop the sequence."""
     ```
 
-### Property Types and Validation
+### Property types and validation
 
 Properties are automatically typed based on their return annotations,
 but you can be explicit:
@@ -491,11 +547,11 @@ class MyDevice(GenericDevice):
         return self._gain
 ```
 
-## Device Lifecycle
+## Device lifecycle
 
 All Python devices follow this lifecycle:
 
-### 1. Creation and Loading
+### 1. Creation and loading
 
 ```python
 # Create device instance
@@ -533,7 +589,7 @@ core.setCameraDevice("Camera1")
 
 # Use standard API
 core.setExposure(50)
-image = core.snapImage()
+image = core.snap()
 ```
 
 ### 4. Shutdown
@@ -556,10 +612,10 @@ class MyCamera(CameraDevice):
         super().shutdown()
 ```
 
-## Thread Safety
+## Thread safety
 
-Python devices are automatically made thread-safe using locks. All device
-methods are called with the device locked to prevent concurrent access.
+When the core calls into a Python device, it does so with the device locked, so
+those calls don't run concurrently.
 
 If you need manual locking:
 
@@ -573,33 +629,46 @@ with device:
     device.some_internal_method()
 ```
 
-## Events and Metadata
+## Events and metadata
 
-Python devices work seamlessly with the event system:
-
-```python
-@core.events.propertyChanged.connect
-def on_property_changed(device, prop, value):
-    print(f"{device}.{prop} = {value}")
-
-
-# This will emit the event
-core.setProperty("Camera1", "Exposure", 100)
-```
-
-Sequence acquisitions include metadata just as C++ camera adapters do
+You can connect to the [events](events.md) of a `UniMMCore` as usual, but note
+that it doesn't (yet) emit `propertyChanged` when you set a property on a Python
+device, or `exposureChanged` for a Python camera (state devices are the
+exception).  Until it does, a device can emit events itself, through its `core`
+attribute:
 
 ```python
-core.startSequenceAcquisition(10)
-while core.getRemainingImageCount() > 0:
-    img, metadata = core.getLastImageAndMD()
-    print(f"Image {metadata['ImageNumber']} timestamp: {metadata['ElapsedTime-ms']}")
+class MyDevice(GenericDevice):
+    _level = 1
+
+    @pymm_property(limits=(0, 10))
+    def level(self) -> int:
+        return self._level
+
+    @level.setter
+    def level(self, value: int) -> None:
+        self._level = value
+        self.core.events.propertyChanged.emit(self.get_label(), "level", str(value))
 ```
 
-## Error Handling
+(Please open an issue if this matters for your device.)
 
-Python devices can raise exceptions which are converted to appropriate
-Micro-Manager errors:
+Sequence acquisitions include metadata just as C++ camera adapters do:
+
+```python
+core.startSequenceAcquisition(10, 0, True)
+while core.isSequenceRunning() or core.getRemainingImageCount():
+    if core.getRemainingImageCount():
+        img, metadata = core.popNextImageAndMD()
+        print(f"Image {metadata['ImageNumber']}: {metadata['ElapsedTime-ms']} ms")
+```
+
+(The metadata contains the standard keys, like `ImageNumber`, `ElapsedTime-ms`,
+`Camera`, `Width` and `Height`, plus whatever your `start_sequence` yielded.)
+
+## Error handling
+
+Exceptions raised in Python devices propagate to the caller:
 
 ```python
 class MyCamera(CameraDevice):
@@ -612,17 +681,40 @@ class MyCamera(CameraDevice):
 ```
 
 ```python
-# This will raise a RuntimeError (converted from ValueError)
-core.setExposure(-5)
+core.setExposure(-5)  # raises ValueError: Exposure must be positive
 ```
 
-## Complete Examples
+## Python devices in config files
 
-See the `examples/` directory for complete working examples:
+`UniMMCore` can load and save Python devices in regular Micro-Manager `.cfg`
+files.  Python device lines are prefixed with `#py `, so a regular
+`CMMCorePlus` (or Micro-Manager itself) reads them as comments and ignores them:
 
-- `examples/unicore_camera.py` - Synthetic camera with temporal patterns
-- `examples/unicore_hamamatsu.py` - Real Hamamatsu camera integration
-- `examples/unicore.py` - Basic XY stage with properties
+```text
+# C++ devices
+Device,Camera,DemoCamera,DCam
 
-These examples demonstrate real-world usage patterns and best practices for
-implementing Python device adapters with UniMMCore.
+# Python devices: pyDevice,<label>,<module>,<class>
+#py pyDevice,PyCamera,my_devices,MyCamera
+#py Property,Core,Camera,PyCamera
+```
+
+The module must be importable (e.g. installed, or on `sys.path`) when the file
+is loaded with `core.loadSystemConfiguration("my.cfg")`.  To write the current
+state (C++ and Python devices) to a file, use
+`core.saveSystemConfiguration("my.cfg")`.  Pass `prefix_py_devices=False` to
+write the Python lines without the `#py ` prefix (the file can then only be
+loaded by `UniMMCore`).
+
+## Complete examples
+
+For complete working examples, see these scripts in the
+[`examples/`](https://github.com/pymmcore-plus/pymmcore-plus/tree/main/examples)
+folder of the repository:
+
+- [`unicore_camera.py`](https://github.com/pymmcore-plus/pymmcore-plus/blob/main/examples/unicore_camera.py):
+  a synthetic camera with temporal patterns
+- [`unicore_hamamatsu.py`](https://github.com/pymmcore-plus/pymmcore-plus/blob/main/examples/unicore_hamamatsu.py):
+  a real Hamamatsu camera
+- [`unicore.py`](https://github.com/pymmcore-plus/pymmcore-plus/blob/main/examples/unicore.py):
+  a basic XY stage with properties

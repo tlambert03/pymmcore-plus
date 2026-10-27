@@ -76,12 +76,12 @@ def configure_logging(
 
     You may also configure logging using the following environment variables:
 
-    - `PYMM_LOG_LEVEL` - The log level for `stderr` logging. By default `INFO`.
+    - `PYMM_LOG_LEVEL` - The log level for `stderr` logging. By default `WARNING`.
     - `PYMM_LOG_FILE` - The path to the log file.  If set to `0`, `false`, `no`,
         or `none`, logging to file will be disabled.
     - `PYMM_LOG_RICH` - If set to `1`, `true`, or `yes`, use `rich` for stderr
-        logging (requires `rich` to be installed). Note: rich formatting adds
-        some overhead; see https://github.com/pymmcore-plus/pymmcore-plus/issues/449.
+        logging. Note: rich formatting adds some overhead; see
+        https://github.com/pymmcore-plus/pymmcore-plus/issues/449.
 
 
     !!! note
@@ -93,18 +93,20 @@ def configure_logging(
     Parameters
     ----------
     file : str | Path | None
-        Path to logfile. May also be set with MM_LOG_FILE environment variable.
-        If `None`, will not log to file.  By default, logs to:
-        Mac OS X:   ~/Library/Application Support/pymmcore-plus/logs
-        Unix:       ~/.local/share/pymmcore-plus/logs
-        Win:        C:\Users\<username>\AppData\Local\pymmcore-plus\pymmcore-plus\logs
+        Path to logfile. May also be set with the `PYMM_LOG_FILE` environment
+        variable. If `None`, will not log to file.  By default, logs to
+        `pymmcore-plus.log` in:
+
+        - macOS: `~/Library/Application Support/pymmcore-plus/logs`
+        - Linux: `~/.local/share/pymmcore-plus/logs`
+        - Windows: `C:\Users\<username>\AppData\Local\pymmcore-plus\pymmcore-plus\logs`
     stderr_level : int | str
         Level for stderr logging.
-        One of "TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL",
-        or 5, 10, 20, 30, 40, or 50, respectively.
-        by default `"INFO"`.
+        One of "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL",
+        or 10, 20, 30, 40, or 50, respectively.
+        By default `"WARNING"` (or the value of `PYMM_LOG_LEVEL`).
     file_level : int | str
-        Level for logging to file, by default `"TRACE"`
+        Level for logging to file, by default `"DEBUG"`.
     log_to_stderr : bool
         Whether to log to stderr, by default True
     file_rotation : int

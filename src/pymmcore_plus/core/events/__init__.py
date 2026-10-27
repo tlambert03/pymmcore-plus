@@ -1,3 +1,8 @@
+"""Signals emitted by `CMMCorePlus.events`.
+
+See [`PCoreSignaler`][pymmcore_plus.PCoreSignaler] for the list of signals.
+"""
+
 from typing import TYPE_CHECKING, Any
 
 from pymmcore_plus._util import signals_backend

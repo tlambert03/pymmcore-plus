@@ -1,3 +1,5 @@
+"""Signals emitted by the MDA runner (`core.mda.events`) during an acquisition."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

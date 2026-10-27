@@ -16,10 +16,11 @@ class ConfigGroup(MutableMapping[str, Configuration]):
     """Convenience object for dealing with a set of related Configuration objects.
 
     This object behaves as a [`collections.abc.MutableMapping`][] of `str`
-    (configuration group name) to [`Configuration`][pymmcore_plus.Configuration]
+    (preset name) to [`Configuration`][pymmcore_plus.Configuration]
     objects.
 
-    It is object type returned by [`pymmcore_plus.CMMCorePlus.getConfigGroupObject`][].
+    It is the object type returned by
+    [`pymmcore_plus.CMMCorePlus.getConfigGroupObject`][].
 
     Parameters
     ----------
@@ -40,7 +41,7 @@ class ConfigGroup(MutableMapping[str, Configuration]):
 
     @property
     def core(self) -> CMMCorePlus:
-        """Return the `CMMCorePlus` instance to which this Device is bound."""
+        """Return the `CMMCorePlus` instance to which this ConfigGroup is bound."""
         return self._mmc
 
     def exists(self) -> bool:

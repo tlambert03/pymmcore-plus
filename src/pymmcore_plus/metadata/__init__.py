@@ -1,3 +1,5 @@
+"""Schema and helpers for the metadata emitted during an MDA."""
+
 from .functions import frame_metadata, summary_metadata
 from .schema import (
     ConfigGroup,

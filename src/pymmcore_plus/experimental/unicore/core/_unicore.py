@@ -211,17 +211,19 @@ class UniMMCore(CMMCorePlus):
         Lines prefixed with `#py ` are processed as Python device commands but
         are ignored by upstream C++/pymmcore implementations.
 
-        Format example::
+        Format example:
 
-            # C++ devices
-            Device, Camera, DemoCamera, DCam
-            Property, Core, Initialize, 1
+        ```text
+        # C++ devices
+        Device,Camera,DemoCamera,DCam
+        Property,Core,Initialize,1
 
-            # Python devices (hidden from upstream via comment prefix)
-            # py pyDevice,PyCamera,mypackage.cameras,MyCameraClass
-            # py Property,PyCamera,Exposure,50.0
+        # Python devices (hidden from upstream via comment prefix)
+        #py pyDevice,PyCamera,mypackage.cameras,MyCameraClass
+        #py Property,PyCamera,Exposure,50.0
+        ```
 
-        https://micro-manager.org/Micro-Manager_Configuration_Guide#configuration-file-syntax
+        See <https://micro-manager.org/Micro-Manager_Configuration_Guide#configuration-file-syntax>
 
         For relative paths, the current working directory is first checked, then
         the device adapter path is checked.

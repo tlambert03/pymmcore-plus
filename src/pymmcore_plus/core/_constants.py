@@ -13,6 +13,8 @@ import pymmcore_plus._pymmcore as pymmcore
 
 
 class Keyword(StrEnum):
+    """Standard property and device names (the `g_Keyword_*` constants)."""
+
     Name = pymmcore.g_Keyword_Name
     Description = pymmcore.g_Keyword_Description
 
@@ -88,6 +90,8 @@ class Keyword(StrEnum):
 
 
 class CFGCommand(StrEnum):
+    """Commands used in Micro-Manager configuration (`.cfg`) files."""
+
     Device = pymmcore.g_CFGCommand_Device
     Label = pymmcore.g_CFGCommand_Label
     Property = pymmcore.g_CFGCommand_Property
@@ -117,6 +121,8 @@ class CFGCommand(StrEnum):
 
 
 class CFGGroup(StrEnum):
+    """Names of built-in config groups and presets (`System`, `Startup`, etc...)."""
+
     System = pymmcore.g_CFGGroup_System
     System_Startup = pymmcore.g_CFGGroup_System_Startup
     System_Shutdown = pymmcore.g_CFGGroup_System_Shutdown
@@ -127,6 +133,8 @@ class CFGGroup(StrEnum):
 
 
 class DeviceType(IntEnum):
+    """Type of a Micro-Manager device."""
+
     UnknownType = pymmcore.UnknownType
     AnyType = pymmcore.AnyType
     CameraDevice = pymmcore.CameraDevice
@@ -172,6 +180,8 @@ class DeviceType(IntEnum):
 
 
 class PropertyType(IntEnum):
+    """Type of a device property value."""
+
     Undef = pymmcore.Undef
     String = pymmcore.String
     Float = pymmcore.Float
@@ -225,6 +235,8 @@ class PropertyType(IntEnum):
 
 
 class ActionType(IntEnum):
+    """Action that triggered a device property handler."""
+
     NoAction = pymmcore.NoAction
     BeforeGet = pymmcore.BeforeGet
     AfterSet = pymmcore.AfterSet
@@ -235,6 +247,8 @@ class ActionType(IntEnum):
 
 
 class PortType(IntEnum):
+    """Type of a port device (serial, USB, HID)."""
+
     InvalidPort = pymmcore.InvalidPort
     SerialPort = pymmcore.SerialPort
     USBPort = pymmcore.USBPort
@@ -247,6 +261,8 @@ class PortType(IntEnum):
 # but instead translates MM::FocusDirectionTowardSample into a different number:
 # https://github.com/micro-manager/mmCoreAndDevices/tree/MMCore/MMCore.cpp#L2063-L2074
 class FocusDirection(IntEnum):
+    """Direction a focus stage moves (towards or away from the sample)."""
+
     Unknown = 0
     TowardSample = 1
     AwayFromSample = -1

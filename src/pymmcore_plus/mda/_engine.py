@@ -62,35 +62,42 @@ _SLM_DEVICES_PIXEL_ON_VALUES: dict[str, int] = {
 
 
 class MDAEngine(PMDAEngine):
-    """The default MDAengine that ships with pymmcore-plus.
+    """The default MDAEngine that ships with pymmcore-plus.
 
     This implements the [`PMDAEngine`][pymmcore_plus.mda.PMDAEngine] protocol, and
     uses a [`CMMCorePlus`][pymmcore_plus.CMMCorePlus] instance to control the hardware.
+    For each event, it moves the stages, sets the channel preset, exposure, properties
+    and ROI, waits for the system, and snaps an image (see [what the engine
+    does][what-the-engine-does]).  Where the hardware allows it, consecutive events
+    are merged into hardware-triggered sequences.
 
     It may be subclassed to provide custom behavior, or to override specific methods.
-    <https://pymmcore-plus.github.io/pymmcore-plus/guides/custom_engine/>
+    See [Custom Acquisition Engines][custom-acquisition-engines].
 
     Attributes
     ----------
-    mmcore: CMMCorePlus
+    mmcore : CMMCorePlus
         The `CMMCorePlus` instance to use for hardware control.
     use_hardware_sequencing : bool
         Whether to use hardware sequencing if possible. If `True`, the engine will
-        attempt to combine MDAEvents into a single `SequencedEvent` if
-        [`core.canSequenceEvents()`][pymmcore_plus.CMMCorePlus.canSequenceEvents]
-        reports that the events can be sequenced. This can be set after instantiation.
-        By default, this is `True`, however in various testing and demo scenarios, you
-        may wish to set it to `False` in order to avoid unexpected behavior.
+        attempt to combine MDAEvents into a single `SequencedEvent` when the hardware
+        supports it (see
+        [`iter_sequenced_events`][pymmcore_plus.core.iter_sequenced_events]). This can
+        be set after instantiation.  By default, this is `True`, however in various
+        testing and demo scenarios, you may wish to set it to `False` in order to avoid
+        unexpected behavior.  Note that events are merged without comparing their
+        `metadata`, so set it to `False` if your engine depends on per-event metadata.
     force_set_xy_position : bool
         Whether to always set the XY position, even if the target position is the same
         as the last commanded position (this does *not* query the stage for the
         current position). By default, this is `True`.
     restore_initial_state : bool | None
         Whether to restore the initial hardware state after the MDA sequence completes.
-        If `True`, the engine will capture the initial state (positions,
-        config groups, exposure settings) before the sequence starts and restore it
-        after completion.  If `None` (the default), `restore_initial_state` will
-        be set to `True` if FocusDirection is known (i.e. not Unknown).
+        If `True`, the engine will capture the initial state (XY and Z positions,
+        config groups, exposure, autoshutter and ROI) before the sequence starts and
+        restore it after completion.  If `None` (the default), `restore_initial_state`
+        will be set to `True` if FocusDirection is known (i.e. not Unknown).  Stage
+        positions are never restored while the focus direction is unknown.
     timeout_base : float
         Minimum per-image timeout in seconds for sequenced acquisitions. The actual
         timeout used is `max(timeout_base, exposure_s * timeout_multiplier)`.

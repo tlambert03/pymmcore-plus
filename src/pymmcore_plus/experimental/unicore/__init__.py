@@ -1,3 +1,5 @@
+"""Pure-Python device adapters, used alongside C++ devices with `UniMMCore`."""
+
 from .core._unicore import UniMMCore
 from .devices._camera import CameraDevice, SimpleCameraDevice
 from .devices._device_base import Device

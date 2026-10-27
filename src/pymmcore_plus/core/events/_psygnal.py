@@ -9,7 +9,10 @@ from ._prop_event_mixin import _DevicePropertyEventMixin
 
 
 class CMMCoreSignaler(SignalGroup, _DevicePropertyEventMixin):
-    """Signals that will be emitted from CMMCorePlus objects."""
+    """Signals that will be emitted from CMMCorePlus objects (psygnal backend).
+
+    See [`PCoreSignaler`][pymmcore_plus.PCoreSignaler] for what each signal emits.
+    """
 
     # native MMCore callback events
     propertiesChanged = Signal()

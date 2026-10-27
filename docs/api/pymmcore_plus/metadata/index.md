@@ -1,7 +1,7 @@
 # Metadata Schema {#pymmcore_plus.metadata}
 
 This page defines the schema for the metadata `dicts` emitted during the
-course of an [Multi-dimensional Acquisition](../../../guides/mda_engine.md) (MDA).
+course of a [multi-dimensional acquisition](../../../guides/mda_engine.md) (MDA).
 
 These are not classes (and should not be imported outside of a
 [`typing.TYPE_CHECKING`][] clause), but rather are [`typing.TypedDict`][]
@@ -10,11 +10,31 @@ definitions that outline the structure of objects that are passed to the
 [`frameReady`][pymmcore_plus.mda.events.PMDASignaler.frameReady] callbacks in an
 MDA.  One use case for these definitions is to provide type hints for the
 arguments to these callbacks, which is both handy for looking up the structure
-of the metadata and for static type checking.
+of the metadata and for static type checking:
 
-![metadata hints](../../../images/meta_hints.png)
+```python
+from __future__ import annotations
 
-## Primary Metadata Types
+from typing import TYPE_CHECKING
+
+from pymmcore_plus import CMMCorePlus
+
+if TYPE_CHECKING:
+    import numpy as np
+    import useq
+
+    from pymmcore_plus.metadata import FrameMetaV1
+
+core = CMMCorePlus()
+
+
+@core.mda.events.frameReady.connect
+def on_frame(img: np.ndarray, event: useq.MDAEvent, meta: FrameMetaV1) -> None:
+    # your editor now knows which keys `meta` has
+    print(meta["camera_device"], meta["exposure_ms"], meta["runner_time_ms"])
+```
+
+## Primary metadata types
 
 ::: pymmcore_plus.metadata.SummaryMetaV1
     options:
@@ -28,7 +48,7 @@ of the metadata and for static type checking.
 
 ------------
 
-## Supporting Types
+## Supporting types
 
 ::: pymmcore_plus.metadata.DeviceInfo
     options:

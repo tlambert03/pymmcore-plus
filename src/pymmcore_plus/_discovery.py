@@ -173,27 +173,35 @@ def find_micromanager(return_first: bool = True) -> str | list[str] | None:
 
     In order, this will look for:
 
-    1. An environment variable named `MICROMANAGER_PATH`
-    2. A path stored in the `CURRENT_MM_PATH` file (set by `use_micromanager`).
-    3. A `Micro-Manager*` folder in the `pymmcore-plus` user data directory
-       (this is the default install location when running `mmcore install`)
+    1. An environment variable named `MICROMANAGER_PATH`.
+    2. A path previously selected with `mmcore use` (or
+       [`use_micromanager`][pymmcore_plus.use_micromanager]).
+    3. A `Micro-Manager*` folder in the `mm` folder of the `pymmcore-plus` user
+       data directory.  This is where `mmcore install` puts things by default:
 
-        - **Windows**: C:\Users\\[user]\AppData\Local\pymmcore-plus\pymmcore-plus
-        - **macOS**: ~/Library/Application Support/pymmcore-plus
-        - **Linux**: ~/.local/share/pymmcore-plus
+        - **Windows**: `C:\Users\<user>\AppData\Local\pymmcore-plus\pymmcore-plus\mm`
+        - **macOS**: `~/Library/Application Support/pymmcore-plus/mm`
+        - **Linux**: `~/.local/share/pymmcore-plus/mm`
 
-    4. A `Micro-Manager*` folder in the `pymmcore_plus` package directory (this is the
-       default install location when running `python -m pymmcore_plus.install`)
-    5. The default micro-manager install location:
+    4. The device adapters bundled with the
+       [`mm-test-adapters`](https://pypi.org/project/mm-test-adapters/) Python
+       package, if it is installed (`pip install mm-test-adapters`).  These are
+       just the test devices (`DemoCamera`, `Utilities`, `SequenceTester`, etc...).
+    5. A `Micro-Manager*` folder in the default Micro-Manager install location:
 
         - **Windows**: `C:/Program Files/`
         - **macOS**: `/Applications`
         - **Linux**: `/usr/local/lib`
 
+    With `return_first=True`, installations whose device interface version doesn't
+    match the one required by the installed `pymmcore` are skipped (except for
+    `MICROMANAGER_PATH`, which is always used as-is).  Run `mmcore list` to see
+    everything that was found, and which one is active.
+
     !!! note
 
         This function is used by [`pymmcore_plus.CMMCorePlus`][] to locate the
-        micro-manager device adapters.  By default, the output of this function
+        Micro-Manager device adapters.  By default, the output of this function
         is passed to
         [`setDeviceAdapterSearchPaths`][pymmcore_plus.CMMCorePlus.setDeviceAdapterSearchPaths]
         when creating a new `CMMCorePlus` instance.
@@ -272,17 +280,17 @@ def use_micromanager(
 ) -> Path | None:
     """Set the preferred Micro-Manager path.
 
-    This sets the preferred micromanager path, and persists across sessions.
+    This sets the preferred Micro-Manager path, and persists across sessions.
     This path takes precedence over everything *except* the `MICROMANAGER_PATH`
-    environment variable.
+    environment variable.  (This is what `mmcore use` calls.)
 
     Parameters
     ----------
     path : str | Path | None
-        Path to an existing directory. This directory should contain micro-manager
+        Path to an existing directory. This directory should contain Micro-Manager
         device adapters. If `None`, the path will be determined using `pattern`.
-    pattern : str Pattern | | None
-        A regex pattern to match against the micromanager paths found by
+    pattern : str | Pattern | None
+        A regex pattern to match against the Micro-Manager paths found by
         `find_micromanager`. If no match is found, a `FileNotFoundError` will be raised.
     """
     if path is None:

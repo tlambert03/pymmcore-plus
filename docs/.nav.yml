@@ -1,9 +1,12 @@
-# Navigation for pymmcore-plus' reference section in the unified docs.
+# Navigation for pymmcore-plus' API Reference section in the unified docs.
 # Guide pages (guides/, examples/, install.md, ...) are placed into the
-# site-wide User Guide by the hub: pymmcore-plus/pymmcore-plus.github.io
+# site-wide Getting Started and User Guide by the hub:
+# pymmcore-plus/pymmcore-plus.github.io
 title: pymmcore-plus
 nav:
-  - Overview: index.md
+  - index.md
   - api/pymmcore_plus
-  - Command line (mmcore): cli.md
-  - Environment variables: env_var.md
+  - Constants: guides/constants.md
+  - Events: reference/events.md
+  - Command Line (mmcore): cli.md
+  - Environment Variables: env_var.md

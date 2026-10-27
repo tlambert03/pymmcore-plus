@@ -1,3 +1,5 @@
+"""Mock objects for testing."""
+
 from typing import Any
 from unittest.mock import MagicMock
 

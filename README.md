@@ -134,7 +134,7 @@ core = CMMCorePlus()
 ### Examples
 
 See a number of [usage examples in the
-documentation](http://pymmcore-plus.github.io/pymmcore-plus/examples/mda/).
+documentation](https://pymmcore-plus.github.io/pymmcore-plus/guides/mda_engine/).
 
 You can find some basic python scripts in the [examples](examples) directory of
 this repository

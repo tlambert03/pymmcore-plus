@@ -1,40 +1,37 @@
-# Install
-
-## Installing pymmcore-plus
-
-`pymmcore-plus` can be installed with pip:
-
-```bash
-pip install pymmcore-plus
-```
-
-or with conda:
-
-```bash
-conda install -c conda-forge pymmcore-plus
-```
-
-... and then proceed to the next section to learn about device adapters.
-
-## Installing Micro-Manager Device Adapters
+# Micro-Manager Device Adapters
 
 Just like the underlying [`pymmcore`](https://github.com/micro-manager/pymmcore) library,
-`pymmcore-plus` also relies on the device adapters and C++ core provided by
+`pymmcore-plus` relies on the device adapters and C++ core provided by
 [mmCoreAndDevices](https://github.com/micro-manager/mmCoreAndDevices#mmcoreanddevices).
-They can be installed in two ways:
+(The Python packages themselves are covered on the
+[Installation](../getting-started/install.md) page.)
+
+## Installing Micro-Manager device adapters
+
+The device adapters can be installed in two ways:
 
 1. **Use the `mmcore` command line tool**
 
-    This library provides a quick way to install the latest version of micro-manager:
+    `pymmcore-plus` provides a quick way to install the latest compatible version
+    of Micro-Manager:
 
     ```bash
     mmcore install
     ```
 
-    This will download the latest release of micro-manager and, by default, place it in
-    a `pymmcore-plus\mm` folder in the user's data directory (e.g. `C:\Users\UserName\AppData\Local\pymmcore-plus\mm`). If you would like to modify
-    the location of the installation, or the release of micro-manager to install, you can use
-    the `--dest` and `--release` flags respectively.
+    This will download the most recent nightly build of Micro-Manager that matches
+    your version of `pymmcore` and, by default, place it in a `pymmcore-plus/mm`
+    folder in the user's data directory:
+
+    | OS      | Path |
+    | ------- | ---- |
+    | Windows | `C:\Users\UserName\AppData\Local\pymmcore-plus\pymmcore-plus\mm` |
+    | macOS   | `~/Library/Application Support/pymmcore-plus/mm` |
+    | Linux   | `~/.local/share/pymmcore-plus/mm` |
+
+    If you would like to modify the location of the installation, or the release
+    of Micro-Manager to install, you can use the `--dest` and `--release` flags
+    respectively.
 
     For more information on the `install` command, run:
 
@@ -42,50 +39,100 @@ They can be installed in two ways:
     mmcore install --help
     ```
 
-    To explore all the `mmcore` command line tool functionalities, run:
-
-    ```bash
-    mmcore --help
-    ```
+    To explore all the `mmcore` command line tool functionalities, run
+    `mmcore --help` (or see the [CLI reference](cli.md)).
 
 2. **Download manually from micro-manager.org**
 
-    Go to the [micro-manager
-    downloads](https://micro-manager.org/Micro-Manager_Nightly_Builds) page and
-    download the latest release for your Operating System.
+    Go to the [Micro-Manager nightly
+    builds](https://micro-manager.org/Micro-Manager_Nightly_Builds) page and
+    download a build for your operating system whose device interface version
+    matches your `pymmcore` (see
+    [below](#understanding-device-interface-versions)).  This is *not*
+    necessarily the latest release.
+
+!!! warning "Apple Silicon and Linux"
+
+    Micro-Manager only publishes nightly builds for Windows and Intel macOS.  On
+    Linux, and on macOS with an Apple Silicon (M1, M2, ...) processor,
+    `mmcore install` prints `Unsupported platform/architecture for nightly build`
+    and installs just the *test* adapters (`DemoCamera`, `Utilities`,
+    `SequenceTester` and `NotificationTester`) from
+    [mm-test-adapters](https://github.com/micro-manager/mm-test-adapters).  That's
+    enough for the demo configuration used throughout these docs, but to
+    control real hardware you will need to build the adapters you need
+    (see [Building device adapters](#building-device-adapters) below).
 
 !!! danger "Critical"
 
     The *device interface version* MUST match between `pymmcore` and the
-    Micro-Manager device adapters. See [below](#understanding-device-interface-versions)
+    Micro-Manager device adapters. See [below](#understanding-device-interface-versions).
 
+## Showing the current installation
 
-## Show the currently used Micro-Manager installation
-
-To see which micro-manager installation `pymmcore-plus` is using, you
-can run:
+To see which Micro-Manager installations `pymmcore-plus` has found, and which one
+it is using, run:
 
 ```shell
 mmcore list
 ```
 
-or, if you didn't install with the `cli` extra, you can use
-[`find_micromanager`][pymmcore_plus.find_micromanager]:
+The output looks something like this (the active installation is marked with ➤):
+
+```console
+Required pymmcore device interface version: 75
+
+📁 ~/Library/Application Support/pymmcore-plus/mm
+   ➤ Micro-Manager-75.20260226 (DIV 75) (active)
+   • Micro-Manager-74.20260129 (DIV 74) (incompatible)
+```
+
+From Python, you can use [`find_micromanager`][pymmcore_plus.find_micromanager]:
 
 ```shell
 python -c "from pymmcore_plus import find_micromanager; print(find_micromanager())"
 ```
 
-## Set the active Micro-Manager installation
+## Setting the active installation
 
-By default, `pymmcore-plus` will look for a `Micro-Manager` folder in the
-default install location. On Windows this is `C:\Program Files\`, on macOS it is
-`/Applications/` and on Linux it is `/usr/local/lib/`. To override these default
-device adapter search path, set the `MICROMANAGER_PATH` environment variable
+When you create a [`CMMCorePlus`][pymmcore_plus.CMMCorePlus], `pymmcore-plus`
+looks for device adapters in the following places, and uses the first one whose
+device interface version matches `pymmcore`:
+
+1. The `MICROMANAGER_PATH` environment variable (always used, if set).
+2. A path previously selected with `mmcore use` (see below).  If it's no longer
+   compatible, it is forgotten (with a warning).
+3. The `mmcore install` folder in the user data directory (see the table above).
+   If there are several compatible installations there, the last one in
+   alphabetical order is used.
+4. The [`mm-test-adapters`](https://pypi.org/project/mm-test-adapters/) Python
+   package, if it is installed.
+5. A `Micro-Manager*` folder in the default Micro-Manager install location:
+   `C:\Program Files\` on Windows, `/Applications/` on macOS, and
+   `/usr/local/lib/` on Linux.
+
+So if you already have Micro-Manager installed in the default location, and
+`mmcore list` says that it is compatible, it will be found automatically (unless
+one of the earlier locations also has a compatible installation).  If
+`mmcore list` says that it's incompatible, run `mmcore install` to get a
+compatible set of adapters.
+
+!!! tip "Using the Micro-Manager app too?"
+
+    That's fine, but `pymmcore-plus` doesn't connect to a running Micro-Manager
+    (it loads the device adapters itself).  Most devices can only be opened by one
+    program at a time, so close Micro-Manager before you load the same hardware
+    configuration in Python (and vice versa).
+
+To override the device adapter search path for a single session (or script), set
+the `MICROMANAGER_PATH` environment variable:
 
 ```shell
 export MICROMANAGER_PATH=/path/to/installation
 ```
+
+(For a single core object, you can also pass the folder directly:
+`CMMCorePlus(mm_path="/path/to/installation")`.)
 
 If you want to permanently set the Micro-Manager installation path that
 `pymmcore-plus` uses, you can use the `mmcore use` command:
@@ -95,7 +142,7 @@ mmcore use <some path or pattern>
 ```
 
 ... where `<some path or pattern>` is either a path to an existing directory
-(containing micro-manager device adapters) or a pattern to match against
+(containing Micro-Manager device adapters) or a pattern to match against
 directories returned by [`find_micromanager`][pymmcore_plus.find_micromanager].
 
 Alternatively, you can use the
@@ -107,16 +154,24 @@ returned by [`find_micromanager`][pymmcore_plus.find_micromanager]:
 python -c "from pymmcore_plus import use_micromanager; use_micromanager(path=..., pattern=...)"
 ```
 
-### On Linux
+## Building device adapters
 
-On a linux based system the easiest approach is to just install the C++ core of
-micromanager,
+On Linux and Apple Silicon there are no pre-built Micro-Manager adapters beyond
+the test devices, so you will need to build the C++ core and device adapters
+yourself from
 [mmCoreAndDevices](https://github.com/micro-manager/mmCoreAndDevices#mmcoreanddevices).
-To do that follow the [build
+To do that, follow the [build
 instructions](https://github.com/micro-manager/micro-manager/blob/main/doc/how-to-build.md#building-on-unix)
-in the micro-manager repo.
+in the micro-manager repo, then point `pymmcore-plus` at the folder with
+`mmcore use`.
 
-## Understanding Device Interface Versions
+On macOS and Linux, `mmcore build-dev` can also clone the repository and build a
+few adapters for you (`DemoCamera`, `Utilities` and `SequenceTester` by default,
+or the names you pass it).  Not all adapters will build this way, and you'll need
+the build tools described in the instructions above.  Run
+`mmcore build-dev --help` for the options.
+
+## Understanding device interface versions
 
 Micro-Manager's C++ layer (called MMCore) controls devices via adapters that are
 compiled into platform-specific shared libraries.  These libraries are always
@@ -126,9 +181,9 @@ interface version that does not match the version expected by the core, then you
 will get an error.
 
 [pymmcore](https://github.com/micro-manager/pymmcore) is a library that wraps
-the C++ code and makes it available to python.  It has a 5-number version string
-that looks something like `11.1.1.71.2`.  The first three parts (here: `11.1.1`)
-represent the version of the MMCore library.  The next number (here: `71`) *is
+the C++ code and makes it available to Python.  It has a 5-number version string
+that looks something like `12.5.1.75.0`.  The first three parts (here: `12.5.1`)
+represent the version of the MMCore library.  The next number (here: `75`) *is
 the device interface version that pymmcore expects*.  (The last number is a
 pymmcore-specific build number).  To query version information of your installed
 libraries you can run:
@@ -143,13 +198,13 @@ mmcore --version
     interface version as your version of pymmcore.**
 
     By default, when you run `mmcore install`, it will pick the latest compatible
-    version to install. However, you can also do this explicitly.  For the example
-    above, for a device interface version of `71`, you could explicitly install the
-    last compatible device adapters listed on the table below with `mmcore install`
-    as follows:
+    version to install. However, you can also do this explicitly.  For example,
+    with an older pymmcore that expects device interface version `74`, you could
+    explicitly install the last compatible device adapters listed on the table
+    below with `mmcore install` as follows:
 
     ```sh
-    mmcore install -r 20250310
+    mmcore install -r 20260225
     ```
 
 Here is a list of the latest device interface numbers, the date of the first
@@ -215,6 +270,3 @@ bumped the version.
     |16|20070412|[38ebafde1](https://github.com/micro-manager/mmCoreAndDevices/commit/38ebafde1)|
     |15|20070405|[18ec4b48b](https://github.com/micro-manager/mmCoreAndDevices/commit/18ec4b48b)|
     |14|20070227|[3b69e7670](https://github.com/micro-manager/mmCoreAndDevices/commit/3b69e7670)|
-
-
-    

@@ -190,9 +190,9 @@ class DeviceProperty:
     def dict(self) -> InfoDict:
         """Return dict of info about this Property.
 
-        Returns an [`InfoDict`][pymmcore_plus.core._property.InfoDict] with the
-        following keys: `"valid", "value", "type", "device_type", "read_only",
-        "pre_init", "range", "allowed"`.
+        Returns a `dict` with the following keys: `"valid"`, `"value"`, `"type"`,
+        `"device_type"`, `"read_only"`, `"sequenceable"`, `"sequence_max_length"`,
+        `"pre_init"`, `"range"`, `"allowed_values"`.
 
         If the device is invalid or not loaded, the `"valid"` key will be `False`
         and the rest of the keys will be `None`.

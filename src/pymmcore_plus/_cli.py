@@ -70,7 +70,7 @@ def _main(
 ) -> None:
     """mmcore: pymmcore-plus command line (v{version}).
 
-    For additional help on a specific command: type `mmcore [command] --help`
+    For additional help on a specific command: type `mmcore COMMAND --help`
     """
     # fix for windows CI encoding and emoji printing
     if getattr(sys.stdout, "encoding", None) != "utf-8":
@@ -147,7 +147,7 @@ def _list() -> None:
 def mmstudio() -> None:  # pragma: no cover
     """Run the Java Micro-Manager GUI.
 
-    This command will attempt to locate an execute an ImageJ application found in
+    This command will attempt to locate and execute an ImageJ application found in
     the active Micro-Manager directory.
     """
     mm = pymmcore_plus.find_micromanager()
@@ -192,7 +192,13 @@ def install(
         help="Install only test adapters (e.g. DemoCamera and others for testing).",
     ),
 ) -> None:
-    """Install Micro-Manager Device adapters from <https://download.micro-manager.org>."""
+    """Install Micro-Manager device adapters from <https://download.micro-manager.org>.
+
+    On Windows and Intel macOS, this downloads a nightly build of Micro-Manager.
+    Micro-Manager doesn't publish nightly builds for Linux or Apple Silicon, so on
+    those platforms only the test adapters (DemoCamera, Utilities, etc...) are
+    installed, from <https://github.com/micro-manager/mm-test-adapters>.
+    """
     import pymmcore_plus.install
 
     kwargs = {}
@@ -255,7 +261,10 @@ def run(
         "Channel", help="Name of Micro-Manager configuration group for channels."
     ),
 ) -> None:
-    """Run a Micro-Manager acquisition from a useq-schema MDASequence file."""
+    """Run a Micro-Manager acquisition from a useq-schema MDASequence file.
+
+    Nothing is saved to disk (this is mostly useful for testing and profiling).
+    """
     import json
 
     from useq import MDASequence
@@ -429,7 +438,7 @@ def use(
         "found by `mmcore list`",
     ),
 ) -> None:
-    """Change the currently used Micro-manager version/path."""
+    """Change the currently used Micro-Manager version/path."""
     from pymmcore_plus._discovery import use_micromanager
 
     _pth = Path(pattern)

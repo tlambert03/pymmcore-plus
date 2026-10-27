@@ -18,7 +18,7 @@ class DeviceAdapter:
     Parameters
     ----------
     library_name : str
-        Device this property belongs to
+        Name of the device adapter library (e.g. `"DemoCamera"`).
     mmcore : CMMCorePlus
         CMMCorePlus instance
     """
@@ -35,7 +35,7 @@ class DeviceAdapter:
 
     @property
     def core(self) -> CMMCorePlus:
-        """Return the `CMMCorePlus` instance to which this Device is bound."""
+        """Return the `CMMCorePlus` instance to which this DeviceAdapter is bound."""
         return self._mmc
 
     @property
